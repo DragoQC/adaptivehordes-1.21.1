@@ -16,6 +16,9 @@ import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.stats.Stats;
+
 
 import org.slf4j.Logger;
 
@@ -57,6 +60,9 @@ public final class PlayerScanner {
         WeaponPower power = calculateWeaponPowers(player);
         result.meleePower = power.meleePower;
         result.arrowPower = power.rangedPower;
+
+				result.gameTime = String.valueOf(getGameTime(player));
+				result.gameTimeInHours = String.valueOf(ticksToHours(getGameTime(player)));
 
         result.totalArmor = (int) player.getAttributeValue(Attributes.ARMOR);
         result.totalArmorToughness = player.getAttributeValue(Attributes.ARMOR_TOUGHNESS);
@@ -195,4 +201,22 @@ public final class PlayerScanner {
         for (ItemStack s : player.getInventory().armor) action.accept(s);
         for (ItemStack s : player.getInventory().offhand) action.accept(s);
     }
+
+
+		// ------------------------------------------------------------------------
+    // GAMETIME RETRIEVAL
+    // ------------------------------------------------------------------------
+		private static long getGameTime(Player player) {
+			if (!(player instanceof ServerPlayer serverPlayer)) {
+					return 0L; // Client or fake player
+			}
+			// PLAY_TIME is stored in ticks
+			return serverPlayer.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME));
+		}
+		private static int ticksToHours(long ticks) {
+			long seconds = ticks / 20;
+			long minutes = seconds / 60;
+			return (int)(minutes / 60);  // total whole hours
+		}
+
 }

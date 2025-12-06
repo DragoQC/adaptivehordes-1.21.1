@@ -5,6 +5,8 @@ import java.util.UUID;
 public class PlayerScanResult {
     // Player identity
     public String name;
+    public String gameTime;
+		public String gameTimeInHours;
     
     // Combat stats
     public double meleePower;
