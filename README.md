@@ -1,25 +1,41 @@
+🌊 Adaptive Horde
 
-Installation information
-=======
+Dynamic mob hordes that scale with your power
 
-This template repository can be directly cloned to get you started with a new
-mod. Simply create a new repository cloned from this one, by following the
-instructions provided by [GitHub](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template).
+📖 Overview
+Adaptive Horde is a server-side mod that brings true progression-based difficulty to Minecraft. Instead of relying on arbitrary day counts or manual difficulty settings, the mod analyzes each player's gear and dynamically spawns hordes of mobs that match their power level.
+The better your equipment, the stronger and more numerous the enemies become. No more steamrolling through the night once you get diamond armor - the world fights back!
 
-Once you have your clone, simply open the repository in the IDE of your choice. The usual recommendation for an IDE is either IntelliJ IDEA or Eclipse.
+✨ Features
+🎯 Gear-Based Scaling
 
-If at any point you are missing libraries in your IDE, or you've run into problems you can
-run `gradlew --refresh-dependencies` to refresh the local cache. `gradlew clean` to reset everything 
-{this does not affect your code} and then start the process again.
+Calculates a "threat level" based on your armor, weapons, and enchantments
+More powerful gear = larger, stronger hordes
+Each player is tracked individually - no punishing new players!
 
-Mapping Names:
-============
-By default, the MDK is configured to use the official mapping names from Mojang for methods and fields 
-in the Minecraft codebase. These names are covered by a specific license. All modders should be aware of this
-license. For the latest license text, refer to the mapping file itself, or the reference copy here:
-https://github.com/NeoForged/NeoForm/blob/main/Mojang.md
+🧟 Universal Mob Support
 
-Additional Resources: 
-==========
-Community Documentation: https://docs.neoforged.net/  
-NeoForged Discord: https://discord.neoforged.net/
+Works with ANY mob from ANY mod
+Vanilla zombies, skeletons, creepers
+Modded mobs automatically supported
+No configuration needed for mod compatibility
+
+🌙 Customizable Horde System
+
+Configure when hordes spawn (every night, every X days, random chance)
+Set base horde sizes and scaling multipliers
+Adjust mob detection ranges
+Enable/disable persistent mob targeting
+
+⚙️ Advanced Mob Customization
+
+Make zombies immune to sunlight during hordes
+Scale mob size and attributes
+Persistent targeting - mobs never lose focus on their target
+Increased detection range for challenging gameplay
+
+📊 Per-Player Difficulty
+
+Each player's gear is tracked separately
+Multiplayer-friendly: experienced players face tougher mobs, new players start easier
+Server-side processing ensures consistent behavior
