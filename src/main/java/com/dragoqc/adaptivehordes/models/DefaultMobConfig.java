@@ -1,4 +1,4 @@
-package com.dragoqc.adaptivehordes.config;
+package com.dragoqc.adaptivehordes.models;
 
 public class DefaultMobConfig {
 	public int mobDetectionRange = 64;

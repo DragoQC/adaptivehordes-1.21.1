@@ -1,4 +1,4 @@
-package com.dragoqc.adaptivehordes.config;
+package com.dragoqc.adaptivehordes.models;
 
 public class DefaultScalingConfig {
     public double gearScoreMultiplier = 1.5;
