@@ -1,0 +1,13 @@
+{
+  "itemGroup.adaptivehordes": "Example Mod Tab",
+  "block.adaptivehordes.example_block": "Example Block",
+  "item.adaptivehordes.example_item": "Example Item",
+
+  "adaptivehordes.configuration.title": "Adaptive Hordes  Configs",
+  "adaptivehordes.configuration.section.adaptivehordes.common.toml": "Adaptive Hordes  Configs",
+  "adaptivehordes.configuration.section.adaptivehordes.common.toml.title": "Adaptive Hordes  Configs",
+  "adaptivehordes.configuration.items": "Item List",
+  "adaptivehordes.configuration.logDirtBlock": "Log Dirt Block",
+  "adaptivehordes.configuration.magicNumberIntroduction": "Magic Number Text",
+  "adaptivehordes.configuration.magicNumber": "Magic Number"
+}
