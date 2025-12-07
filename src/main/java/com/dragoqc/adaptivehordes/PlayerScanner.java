@@ -1,7 +1,7 @@
 package com.dragoqc.adaptivehordes.scanner;
 
 import com.dragoqc.adaptivehordes.AdaptiveHordes;
-import com.dragoqc.adaptivehordes.config.ConfigHelper;
+import com.dragoqc.adaptivehordes.jsonfilehelper.JsonFileHelper;
 import com.dragoqc.adaptivehordes.constants.ColorConstants;
 import com.dragoqc.adaptivehordes.constants.ConfigConstants;
 import com.dragoqc.adaptivehordes.models.PlayerScanResult;
@@ -90,11 +90,11 @@ public final class PlayerScanner {
     public static void saveAll() {
         try {
             File file = new File(
-                ConfigHelper.getConfigDirectory(),
+                JsonFileHelper.getConfigDirectory(),
                 ConfigConstants.PLAYER_SCAN_RESULT_FILE
             );
 
-            ConfigHelper.saveConfig(file, CACHE);
+            JsonFileHelper.saveConfig(file, CACHE);
 
             LOGGER.info(ColorConstants.GREEN +
                 "Saved PlayerScanResult.json (" + CACHE.size() + " players)" +
