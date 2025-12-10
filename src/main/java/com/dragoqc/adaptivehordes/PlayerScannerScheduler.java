@@ -1,7 +1,7 @@
-package com.dragoqc.adaptivehordes.scheduler;
+package com.dragoqc.adaptivehordes.playerscannerscheduler;
 
 import com.dragoqc.adaptivehordes.AdaptiveHordes;
-import com.dragoqc.adaptivehordes.scanner.PlayerScanner;
+import com.dragoqc.adaptivehordes.playerscanner.PlayerScanner;
 import com.dragoqc.adaptivehordes.constants.ColorConstants;
 
 import net.minecraft.server.MinecraftServer;
@@ -11,7 +11,7 @@ import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
-public class PlayerScanScheduler {
+public class PlayerScannerScheduler {
 
     private static boolean scanExecutedThisCycle = false;
 
@@ -52,7 +52,7 @@ public class PlayerScanScheduler {
         PlayerScanner.clearCache();
 
 				for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-						PlayerScanner.scanPlayer(player);
+					PlayerScanner.scanPlayer(player);
 				}
 
 				PlayerScanner.saveAll();

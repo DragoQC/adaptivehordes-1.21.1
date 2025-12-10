@@ -1,4 +1,4 @@
-package com.dragoqc.adaptivehordes.scanner;
+package com.dragoqc.adaptivehordes.playerscanner;
 
 import com.dragoqc.adaptivehordes.AdaptiveHordes;
 import com.dragoqc.adaptivehordes.jsonfilehelper.JsonFileHelper;

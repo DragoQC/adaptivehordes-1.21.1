@@ -11,7 +11,7 @@ import com.dragoqc.adaptivehordes.jsonfilehelper.JsonFileHelper;
 import com.dragoqc.adaptivehordes.models.*;
 
 import net.neoforged.neoforge.common.NeoForge;
-import com.dragoqc.adaptivehordes.scheduler.PlayerScanScheduler;
+import com.dragoqc.adaptivehordes.playerscannerscheduler.PlayerScannerScheduler;
 
 @Mod(AdaptiveHordes.MODID)
 public class AdaptiveHordes {
@@ -35,7 +35,7 @@ public class AdaptiveHordes {
 		mobConfig = JsonFileHelper.loadOrCreate(ConfigConstants.MOB_CONFIG_FILE, DefaultMobConfig.class);
 
 		// Register the scheduler (VERY IMPORTANT)
-		NeoForge.EVENT_BUS.register(PlayerScanScheduler.class);
+		NeoForge.EVENT_BUS.register(PlayerScannerScheduler.class);
 
 		LOGGER.info(ColorConstants.CYAN + "All configs loaded successfully!" + ColorConstants.RESET);
 
