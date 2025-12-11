@@ -123,7 +123,7 @@ public final class PlayerScanner {
                 return;
             }
 
-            double melee = getMainHandAttackDamage(stack);
+            double melee = getMainHandAttackDamage(player,stack);
             if (melee > bestMelee[0]) bestMelee[0] = melee;
         });
 
@@ -134,21 +134,28 @@ public final class PlayerScanner {
     }
 
     /** "Attack Damage" if this stack were held in MAINHAND. */
-    private static double getMainHandAttackDamage(ItemStack stack) {
-        if (stack.isEmpty()) return 0.0;
+		private static double getMainHandAttackDamage(Player player, ItemStack stack) {
+			if (stack.isEmpty()) return 0.0;
 
-        final double[] modDamage = { 0.0 };
+			if (isInfinitySword(stack)) {
+				return ConfigConstants.INFINITY_SWORD_DAMAGE;
+			}	
 
-        // 1.21+: stack.getAttributeModifiers() has no args; filter by slot here
-        stack.getAttributeModifiers().forEach(EquipmentSlot.MAINHAND, (attr, modifier) -> {
-            if (attr.is(Attributes.ATTACK_DAMAGE)) {
-                modDamage[0] += modifier.amount();
-            }
-        });
+			final double[] modDamage = { 0.0 };
 
-        if (modDamage[0] <= 0.0) return 0.0;
-        return 1.0 + modDamage[0]; // base player damage + modifier
-    }
+			stack.getAttributeModifiers().forEach(EquipmentSlot.MAINHAND, (attr, modifier) -> {
+					if (attr.is(Attributes.ATTACK_DAMAGE)) {
+							modDamage[0] += modifier.amount();
+					}
+			});
+
+			if (modDamage[0] <= 0.0) return 0.0;
+			return 1.0 + modDamage[0]; // base player damage + modifier
+		}
+		private static boolean isInfinitySword(ItemStack stack) {
+			String id = stack.getItem().toString();
+    	return "avaritia:infinity_sword".equals(id);
+		}
 
     private static boolean isRangedWeapon(ItemStack stack) {
         if (stack.isEmpty()) return false;
@@ -161,10 +168,6 @@ public final class PlayerScanner {
     }
 
     private static double getRangedPower(ItemStack stack) {
-        // If some modded ranged weapon exposes ATTACK_DAMAGE, use it.
-        double asDamage = getMainHandAttackDamage(stack);
-        if (asDamage > 0.0) return asDamage;
-
         // Otherwise fall back to reasonable vanilla-ish baselines
         if (stack.getItem() instanceof CrossbowItem || stack.getUseAnimation() == UseAnim.CROSSBOW) {
             return BASE_CROSSBOW_POWER;

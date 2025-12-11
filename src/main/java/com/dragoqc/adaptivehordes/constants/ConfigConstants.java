@@ -7,6 +7,8 @@ public class ConfigConstants {
 
 	public static final String CONFIG_FOLDER = "adaptivehordes";
 
+	public static final double INFINITY_SWORD_DAMAGE = 9999;
+
 	private ConfigConstants() {
 		throw new UnsupportedOperationException("This is a constants class");
 	}
