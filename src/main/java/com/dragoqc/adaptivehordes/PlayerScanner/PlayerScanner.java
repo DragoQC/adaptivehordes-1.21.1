@@ -1,7 +1,7 @@
-package com.dragoqc.adaptivehordes.playerscanner;
+package com.dragoqc.adaptivehordes.PlayerScanner;
 
 import com.dragoqc.adaptivehordes.AdaptiveHordes;
-import com.dragoqc.adaptivehordes.jsonfilehelper.JsonFileHelper;
+import com.dragoqc.adaptivehordes.JsonFileHelper.JsonFileHelper;
 import com.dragoqc.adaptivehordes.constants.ColorConstants;
 import com.dragoqc.adaptivehordes.constants.ConfigConstants;
 import com.dragoqc.adaptivehordes.models.PlayerScanResult;

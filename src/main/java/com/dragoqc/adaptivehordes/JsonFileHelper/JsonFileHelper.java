@@ -1,4 +1,4 @@
-package com.dragoqc.adaptivehordes.jsonfilehelper;
+package com.dragoqc.adaptivehordes.JsonFileHelper;
 
 import com.dragoqc.adaptivehordes.constants.ColorConstants;
 import com.dragoqc.adaptivehordes.constants.ConfigConstants;

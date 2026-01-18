@@ -1,7 +1,5 @@
 package com.dragoqc.adaptivehordes.models;
 
-import java.util.UUID;
-
 public class PlayerScanResult {
     // Player identity
     public String name;

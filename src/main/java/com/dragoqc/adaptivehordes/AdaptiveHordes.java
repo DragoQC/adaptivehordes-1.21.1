@@ -7,11 +7,12 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.ModContainer;
 
 import com.dragoqc.adaptivehordes.constants.*;
-import com.dragoqc.adaptivehordes.jsonfilehelper.JsonFileHelper;
+import com.dragoqc.adaptivehordes.JsonFileHelper.JsonFileHelper;
+import com.dragoqc.adaptivehordes.MobWaveScheduler.MobWaveScheduler;
 import com.dragoqc.adaptivehordes.models.*;
 
 import net.neoforged.neoforge.common.NeoForge;
-import com.dragoqc.adaptivehordes.playerscannerscheduler.PlayerScannerScheduler;
+import com.dragoqc.adaptivehordes.PlayerScannerScheduler.PlayerScannerScheduler;
 
 @Mod(AdaptiveHordes.MODID)
 public class AdaptiveHordes {
@@ -21,7 +22,7 @@ public class AdaptiveHordes {
 	// Config instances
 	public static DefaultModConfig modConfig;
 	public static DefaultScalingConfig scalingConfig;
-	public static DefaultMobConfig mobConfig;
+	public static DefaultWaveConfig WaveConfig;
 
 	public AdaptiveHordes(IEventBus modEventBus, ModContainer modContainer) {
 		LOGGER.info(ColorConstants.GREEN + "Adaptive Horde is loading..." + ColorConstants.RESET);
@@ -32,10 +33,10 @@ public class AdaptiveHordes {
 		// Load all configs
 		modConfig = JsonFileHelper.loadOrCreate(ConfigConstants.MOD_CONFIG_FILE, DefaultModConfig.class);
 		scalingConfig = JsonFileHelper.loadOrCreate(ConfigConstants.SCALING_CONFIG_FILE, DefaultScalingConfig.class);
-		mobConfig = JsonFileHelper.loadOrCreate(ConfigConstants.MOB_CONFIG_FILE, DefaultMobConfig.class);
 
 		// Register the scheduler (VERY IMPORTANT)
 		NeoForge.EVENT_BUS.register(PlayerScannerScheduler.class);
+		NeoForge.EVENT_BUS.register(MobWaveScheduler.class);
 
 		LOGGER.info(ColorConstants.CYAN + "All configs loaded successfully!" + ColorConstants.RESET);
 

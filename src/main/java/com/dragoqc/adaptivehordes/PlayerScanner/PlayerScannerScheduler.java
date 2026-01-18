@@ -1,7 +1,7 @@
-package com.dragoqc.adaptivehordes.playerscannerscheduler;
+package com.dragoqc.adaptivehordes.PlayerScannerScheduler;
 
 import com.dragoqc.adaptivehordes.AdaptiveHordes;
-import com.dragoqc.adaptivehordes.playerscanner.PlayerScanner;
+import com.dragoqc.adaptivehordes.PlayerScanner.PlayerScanner;
 import com.dragoqc.adaptivehordes.constants.ColorConstants;
 
 import net.minecraft.server.MinecraftServer;
