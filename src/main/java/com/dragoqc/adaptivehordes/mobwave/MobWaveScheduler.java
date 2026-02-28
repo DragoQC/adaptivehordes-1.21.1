@@ -11,16 +11,19 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.BossEvent;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,9 +35,8 @@ public class MobWaveScheduler {
         "Night ends with your victory."
     };
 
-    // Track which players we already processed for announce/spawn in the current cycle tick
-    private static final Set<UUID> announcedThisCycle = new HashSet<>();
-    private static final Set<UUID> spawnedThisCycle = new HashSet<>();
+    // Track per-player cycle queueing so one wave plan is created per cycle.
+    private static final Map<UUID, Long> queuedCycleByPlayer = new ConcurrentHashMap<>();
     private static final Map<UUID, SpawnPlan> ACTIVE_SPAWN_PLANS = new ConcurrentHashMap<>();
 
     @SubscribeEvent
@@ -47,24 +49,14 @@ public class MobWaveScheduler {
         if (!level.dimension().equals(Level.OVERWORLD)) return;
 
         if (!AdaptiveHordes.modConfig.enableHordes) {
-            announcedThisCycle.clear();
-            spawnedThisCycle.clear();
+            queuedCycleByPlayer.clear();
             ACTIVE_SPAWN_PLANS.clear();
             return;
         }
 
         long time = level.getDayTime();
-
         int interval = AdaptiveHordes.modConfig.waveCheckInterval;
-        int announceDelay = AdaptiveHordes.modConfig.waveAnnounceDelay;
-        int spawnDelay = AdaptiveHordes.modConfig.waveSpawnDelay;
-
-        boolean isAnnounceTick = (time % interval) == announceDelay;
-        boolean isSpawnTick = (time % interval) == spawnDelay;
-
-        // Reset per-cycle state when not on the tick
-        if (!isAnnounceTick) announcedThisCycle.clear();
-        if (!isSpawnTick) spawnedThisCycle.clear();
+        long cycle = Math.floorDiv(time, Math.max(1, interval));
 
         MinecraftServer server = level.getServer();
         if (server == null) return;
@@ -77,59 +69,17 @@ public class MobWaveScheduler {
 
         processQueuedSpawns(level, server);
 
-        if (isAnnounceTick) {
-            runAnnounce(level, players);
-        }
-
-        if (isSpawnTick) {
-            runSpawn(level, players);
+        if (isInSpawnWindow(level)) {
+            runSpawn(level, players, cycle);
         }
     }
 
-    private static void runAnnounce(ServerLevel level, List<ServerPlayer> players) {
+    private static void runSpawn(ServerLevel level, List<ServerPlayer> players, long cycle) {
         for (ServerPlayer player : players) {
             UUID id = player.getUUID();
-            if (announcedThisCycle.contains(id)) continue;
-            announcedThisCycle.add(id);
-
-            PlayerScanResult scan = PlayerScanner.ensurePlayerData(player, level.getGameTime());
-            if (scan == null) {
-                AdaptiveHordes.LOGGER.warn(ColorConstants.YELLOW +
-                    "[MobWaveScheduler] No scan data for " + player.getName().getString() +
-                    " (did PlayerScanner run yet?)" +
-                    ColorConstants.RESET
-                );
-                continue;
-            }
-            if (isIgnored(player)) continue;
-
-            String dimensionId = player.serverLevel().dimension().location().toString();
-            Wave wave = pickAssignedWaveForDimension(null, scan.gearScore, dimensionId);
-            if (wave == null) {
-                AdaptiveHordes.LOGGER.warn(ColorConstants.YELLOW +
-                    "[MobWaveScheduler] No waves configured (waves list empty)." +
-                    ColorConstants.RESET
-                );
-                return;
-            }
-
-            AdaptiveHordes.LOGGER.info(ColorConstants.CYAN +
-                "[MobWaveScheduler] Announce to " + player.getName().getString() +
-                " | gearScore=" + scan.gearScore +
-                " | wave=" + wave.name +
-                " (req=" + wave.strengthRequirement + ")" +
-                ColorConstants.RESET
-            );
-
-            // Intentionally no chat pre-announce to avoid mismatch with spawn-time wave selection.
-        }
-    }
-
-    private static void runSpawn(ServerLevel level, List<ServerPlayer> players) {
-        for (ServerPlayer player : players) {
-            UUID id = player.getUUID();
-            if (spawnedThisCycle.contains(id)) continue;
-            spawnedThisCycle.add(id);
+            Long lastQueuedCycle = queuedCycleByPlayer.get(id);
+            if (lastQueuedCycle != null && lastQueuedCycle.longValue() == cycle) continue;
+            if (ACTIVE_SPAWN_PLANS.containsKey(id)) continue;
 
             PlayerScanResult scan = PlayerScanner.ensurePlayerData(player, level.getGameTime());
             if (scan == null) {
@@ -141,7 +91,7 @@ public class MobWaveScheduler {
                 continue;
             }
             if (isIgnored(player)) {
-                ACTIVE_SPAWN_PLANS.remove(player.getUUID());
+                removePlan(player.getUUID());
                 continue;
             }
 
@@ -169,12 +119,15 @@ public class MobWaveScheduler {
             SpawnPlan plan = new SpawnPlan(
                 player.getUUID(),
                 wave.name,
+                wave.displayName,
                 totalMobs,
                 UUID.randomUUID(),
                 level.getGameTime(),
                 perDimensionWave
             );
+            removePlan(player.getUUID());
             ACTIVE_SPAWN_PLANS.put(player.getUUID(), plan);
+            queuedCycleByPlayer.put(player.getUUID(), cycle);
 
             broadcastWaveSpawningMessage(level.getServer(), wave, player, totalMobs);
         }
@@ -189,22 +142,27 @@ public class MobWaveScheduler {
             if (plan == null) continue;
             if (now < plan.nextSpawnGameTime) continue;
             if (plan.remaining <= 0) {
-                ACTIVE_SPAWN_PLANS.remove(plan.playerId);
+                int remainingForBar = updateBossBar(server, plan, true);
+                if (remainingForBar <= 0 || isWaveFinished(server, plan, now)) {
+                    finishPlan(server, plan, null);
+                } else {
+                    plan.nextSpawnGameTime = now + 20L;
+                }
                 continue;
             }
 
             ServerPlayer player = server.getPlayerList().getPlayer(plan.playerId);
             if (player == null || !player.isAlive()) {
-                ACTIVE_SPAWN_PLANS.remove(plan.playerId);
+                removePlan(plan.playerId);
                 continue;
             }
             if (isIgnored(player)) {
-                ACTIVE_SPAWN_PLANS.remove(plan.playerId);
+                removePlan(plan.playerId);
                 continue;
             }
 
-            String dimensionId = player.serverLevel().dimension().location().toString();
             PlayerScanResult scan = PlayerScanner.ensurePlayerData(player, now);
+            String dimensionId = player.serverLevel().dimension().location().toString();
             int strength = (scan != null) ? scan.gearScore : 0;
             Wave wave = pickAssignedWaveForDimension(plan.wavesByDimension, strength, dimensionId);
             if (wave == null) {
@@ -215,8 +173,15 @@ public class MobWaveScheduler {
             int maxBatch = Math.max(1, AdaptiveHordes.modConfig.maxMobsPerSpawnBatch);
             int batchSize = Math.min(maxBatch, plan.remaining);
             int spawned = MobWaveSpawner.spawnWaveBatch(player.serverLevel(), player, wave, batchSize, plan.spawnId, scan);
+            plan.spawnedSuccessful += Math.max(0, spawned);
             plan.remaining -= batchSize; // consume attempts so queue always progresses
             plan.waveName = wave.name;
+            plan.waveDisplayName = (wave.displayName == null || wave.displayName.isBlank()) ? wave.name : wave.displayName;
+
+            if (spawned > 0 && plan.bossBar == null) {
+                attachBossBar(plan, player);
+                updateBossBar(server, plan, true);
+            }
 
             AdaptiveHordes.LOGGER.info(ColorConstants.CYAN +
                 "[MobWaveScheduler] Spawn batch -> player=" + player.getName().getString() +
@@ -228,32 +193,30 @@ public class MobWaveScheduler {
             );
 
             if (plan.remaining <= 0) {
-                ACTIVE_SPAWN_PLANS.remove(plan.playerId);
-                broadcastWaveCompletedMessage(player);
+                if (isWaveFinished(server, plan, now)) {
+                    finishPlan(server, plan, player);
+                } else {
+                    plan.nextSpawnGameTime = now + 20L;
+                }
                 continue;
             }
 
+            int remainingForBar = updateBossBar(server, plan, false);
+            if (remainingForBar <= 0) {
+                finishPlan(server, plan, player);
+                continue;
+            }
             int delay = computeAdaptiveDelayTicks(level, plan, maxBatch);
             plan.nextSpawnGameTime = now + delay;
         }
     }
 
     private static int computeAdaptiveDelayTicks(ServerLevel level, SpawnPlan plan, int maxBatch) {
-        int lowCount = Math.max(1, AdaptiveHordes.modConfig.lowLoadMobCountReference);
-        int highCount = Math.max(lowCount + 1, AdaptiveHordes.modConfig.highLoadMobCountReference);
-        int highDelay = Math.max(1, AdaptiveHordes.modConfig.lowLoadSpawnDelayTicks);
-        int lowDelay = Math.max(1, AdaptiveHordes.modConfig.highLoadSpawnDelayTicks);
-
+        int baseDelay = Math.max(1, AdaptiveHordes.modConfig.loadSpawnDelayTicks);
         int total = Math.max(1, plan.totalPlanned);
-        int dynamicDelay;
-        if (total <= lowCount) {
-            dynamicDelay = highDelay;
-        } else if (total >= highCount) {
-            dynamicDelay = lowDelay;
-        } else {
-            double t = (double) (total - lowCount) / (double) (highCount - lowCount);
-            dynamicDelay = (int) Math.round(highDelay + ((lowDelay - highDelay) * t));
-        }
+        int reference = Math.max(1, AdaptiveHordes.modConfig.baseHordeSize * 5); // default 10 -> 50
+        int dynamicDelay = (int) Math.round((double) baseDelay * ((double) reference / (double) total));
+        dynamicDelay = Math.max(1, Math.min(baseDelay, dynamicDelay));
 
         int ticksLeft = ticksRemainingInWindow(level);
         if (ticksLeft <= 0) return Math.max(1, dynamicDelay);
@@ -345,7 +308,7 @@ public class MobWaveScheduler {
         }
 
         String message = template
-            .replace("{wave}", wave.name)
+            .replace("{wave}", (wave.displayName == null || wave.displayName.isBlank()) ? wave.name : wave.displayName)
             .replace("{player}", targetPlayer.getName().getString())
             .replace("{count}", String.valueOf(totalMobs));
         Component component = Component.literal(message).withStyle(ChatFormatting.RED);
@@ -362,23 +325,206 @@ public class MobWaveScheduler {
         targetPlayer.displayClientMessage(component, true); // action bar
     }
 
+    public static List<String> getActivePlanDebugLines(MinecraftServer server) {
+        List<String> lines = new ArrayList<>();
+        long now = (server == null || server.overworld() == null) ? 0L : server.overworld().getGameTime();
+        for (SpawnPlan plan : ACTIVE_SPAWN_PLANS.values()) {
+            if (plan == null) continue;
+            String playerLabel = plan.playerId.toString();
+            if (server != null) {
+                ServerPlayer p = server.getPlayerList().getPlayer(plan.playerId);
+                if (p != null) playerLabel = p.getName().getString();
+            }
+            long nextIn = Math.max(0L, plan.nextSpawnGameTime - now);
+            int alive = countAliveMobsForSpawnId(server, plan.spawnId, now, plan);
+            lines.add(
+                "player=" + playerLabel +
+                " wave=" + plan.waveName +
+                " remaining=" + plan.remaining + "/" + plan.totalPlanned +
+                " alive=" + alive +
+                " nextIn=" + nextIn + "t"
+            );
+        }
+        return lines;
+    }
+
+    public static void refreshBossBarForSpawnId(MinecraftServer server, String spawnIdRaw) {
+        if (server == null || spawnIdRaw == null || spawnIdRaw.isBlank()) return;
+        UUID spawnId;
+        try {
+            spawnId = UUID.fromString(spawnIdRaw);
+        } catch (Exception ex) {
+            return;
+        }
+
+        for (SpawnPlan plan : ACTIVE_SPAWN_PLANS.values()) {
+            if (plan == null) continue;
+            if (!spawnId.equals(plan.spawnId)) continue;
+            int remainingForBar = updateBossBar(server, plan, true);
+            if (remainingForBar <= 0) {
+                finishPlan(server, plan, null);
+            }
+            break;
+        }
+    }
+
+    public static void refreshBossBarVisibilityForPlayer(MinecraftServer server, UUID playerId) {
+        if (server == null || playerId == null) return;
+        ServerPlayer player = server.getPlayerList().getPlayer(playerId);
+        for (SpawnPlan plan : ACTIVE_SPAWN_PLANS.values()) {
+            if (plan == null) continue;
+            if (!playerId.equals(plan.playerId)) continue;
+            if (player != null && !isBossBarHidden(player) && plan.bossBar == null && plan.spawnedSuccessful > 0) {
+                attachBossBar(plan, player);
+            }
+            int remainingForBar = updateBossBar(server, plan, true);
+            if (remainingForBar <= 0) {
+                finishPlan(server, plan, player);
+            }
+            break;
+        }
+    }
+
+    private static void attachBossBar(SpawnPlan plan, ServerPlayer player) {
+        if (plan == null || player == null) return;
+        if (isBossBarHidden(player)) {
+            if (plan.bossBar != null) {
+                plan.bossBar.removeAllPlayers();
+            }
+            return;
+        }
+        if (plan.bossBar == null) {
+            String display = (plan.waveDisplayName == null || plan.waveDisplayName.isBlank()) ? plan.waveName : plan.waveDisplayName;
+            plan.bossBar = new ServerBossEvent(
+                Component.literal("Wave " + display + " | Enemies: " + plan.totalPlanned + "/" + plan.totalPlanned),
+                BossEvent.BossBarColor.RED,
+                BossEvent.BossBarOverlay.PROGRESS
+            );
+            plan.bossBar.setDarkenScreen(false);
+            plan.bossBar.setPlayBossMusic(false);
+            plan.bossBar.setCreateWorldFog(false);
+            plan.bossBar.setProgress(1.0f);
+        }
+        plan.bossBar.removeAllPlayers();
+        plan.bossBar.addPlayer(player);
+    }
+
+    private static int updateBossBar(MinecraftServer server, SpawnPlan plan, boolean forceSample) {
+        if (server == null || plan == null) return 0;
+        long now = (server.overworld() == null) ? 0L : server.overworld().getGameTime();
+        int alive = forceSample ? forceAliveSample(server, plan, now) : countAliveMobsForSpawnId(server, plan.spawnId, now, plan);
+        int unspawnedBudget = Math.max(0, plan.totalPlanned - plan.spawnedSuccessful);
+        int remainingForBar = Math.max(0, alive + unspawnedBudget);
+        if (plan.bossBar == null) return remainingForBar;
+
+        ServerPlayer player = server.getPlayerList().getPlayer(plan.playerId);
+        if (player != null && isBossBarHidden(player)) {
+            plan.bossBar.removeAllPlayers();
+            return remainingForBar;
+        }
+
+        float progress = plan.totalPlanned <= 0 ? 0.0f : (float) remainingForBar / (float) plan.totalPlanned;
+        progress = Math.max(0.0f, Math.min(1.0f, progress));
+        plan.bossBar.setProgress(progress);
+        String display = (plan.waveDisplayName == null || plan.waveDisplayName.isBlank()) ? plan.waveName : plan.waveDisplayName;
+        plan.bossBar.setName(Component.literal(
+            "Wave " + display + " | Enemies: " + remainingForBar + "/" + plan.totalPlanned
+        ));
+        if (player != null) {
+            plan.bossBar.removeAllPlayers();
+            plan.bossBar.addPlayer(player);
+        }
+        return remainingForBar;
+    }
+
+    private static boolean isBossBarHidden(ServerPlayer player) {
+        return player != null && player.getPersistentData().getBoolean(AdaptiveHordesCommands.TAG_DISABLE_WAVE_BOSSBAR);
+    }
+
+    private static int forceAliveSample(MinecraftServer server, SpawnPlan plan, long now) {
+        int alive = 0;
+        if (server != null) {
+            for (ServerLevel level : server.getAllLevels()) {
+                for (Entity entity : level.getAllEntities()) {
+                    if (!(entity instanceof LivingEntity living)) continue;
+                    if (!MobWaveSpawner.isWaveSpawnedMob(living)) continue;
+                    String sid = living.getPersistentData().getString(MobWaveSpawner.TAG_WAVE_SPAWN_ID);
+                    if (!plan.spawnId.toString().equals(sid)) continue;
+                    if (!living.isAlive()) continue;
+                    alive++;
+                }
+            }
+        }
+        plan.lastAliveCount = alive;
+        plan.lastAliveSampleGameTime = now;
+        return alive;
+    }
+
+    private static int countAliveMobsForSpawnId(MinecraftServer server, UUID spawnId, long now, SpawnPlan plan) {
+        if (server == null || spawnId == null || plan == null) return 0;
+        if ((now - plan.lastAliveSampleGameTime) < 20L && plan.lastAliveCount >= 0) {
+            return plan.lastAliveCount;
+        }
+        return forceAliveSample(server, plan, now);
+    }
+
+    private static boolean isWaveFinished(MinecraftServer server, SpawnPlan plan, long now) {
+        int alive = countAliveMobsForSpawnId(server, plan.spawnId, now, plan);
+        return plan.remaining <= 0 && alive <= 0;
+    }
+
+    private static void finishPlan(MinecraftServer server, SpawnPlan plan, ServerPlayer player) {
+        if (server != null) {
+            updateBossBar(server, plan, true);
+        }
+        if (plan != null && plan.bossBar != null) {
+            plan.bossBar.setProgress(0.0f);
+            plan.bossBar.removeAllPlayers();
+        }
+        ACTIVE_SPAWN_PLANS.remove(plan.playerId);
+        if (player == null && server != null) {
+            player = server.getPlayerList().getPlayer(plan.playerId);
+        }
+        if (player != null) {
+            broadcastWaveCompletedMessage(player);
+        }
+    }
+
+    private static void removePlan(UUID playerId) {
+        if (playerId == null) return;
+        SpawnPlan removed = ACTIVE_SPAWN_PLANS.remove(playerId);
+        if (removed == null) return;
+        if (removed.bossBar != null) {
+            removed.bossBar.removeAllPlayers();
+        }
+    }
+
     private static final class SpawnPlan {
         private final UUID playerId;
         private String waveName;
+        private String waveDisplayName;
         private final int totalPlanned;
         private final UUID spawnId;
         private final Map<String, String> wavesByDimension;
+        private ServerBossEvent bossBar;
+        private int spawnedSuccessful;
+        private int lastAliveCount;
+        private long lastAliveSampleGameTime;
         private int remaining;
         private long nextSpawnGameTime;
 
-        private SpawnPlan(UUID playerId, String waveName, int totalPlanned, UUID spawnId, long now, Map<String, String> wavesByDimension) {
+        private SpawnPlan(UUID playerId, String waveName, String waveDisplayName, int totalPlanned, UUID spawnId, long now, Map<String, String> wavesByDimension) {
             this.playerId = playerId;
             this.waveName = waveName;
+            this.waveDisplayName = waveDisplayName;
             this.totalPlanned = Math.max(1, totalPlanned);
             this.remaining = this.totalPlanned;
             this.spawnId = spawnId;
             this.nextSpawnGameTime = now;
             this.wavesByDimension = (wavesByDimension == null) ? new HashMap<>() : new HashMap<>(wavesByDimension);
+            this.spawnedSuccessful = 0;
+            this.lastAliveCount = -1;
+            this.lastAliveSampleGameTime = Long.MIN_VALUE;
         }
     }
 }

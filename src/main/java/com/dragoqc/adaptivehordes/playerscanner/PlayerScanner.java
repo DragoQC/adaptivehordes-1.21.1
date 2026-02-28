@@ -1,11 +1,11 @@
 package com.dragoqc.adaptivehordes.playerscanner;
 
 import com.dragoqc.adaptivehordes.AdaptiveHordes;
-import com.dragoqc.adaptivehordes.constants.ColorConstants;
 import com.dragoqc.adaptivehordes.constants.ConfigConstants;
+import com.dragoqc.adaptivehordes.models.DefaultWeaponOverridesConfig;
 import com.dragoqc.adaptivehordes.models.PlayerScanResult;
+import com.dragoqc.adaptivehordes.models.WeaponOverrideEntry;
 import com.dragoqc.adaptivehordes.models.WeaponPower;
-import com.mojang.logging.LogUtils;
 
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -24,17 +24,12 @@ import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
 
-
-import org.slf4j.Logger;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Consumer;
 
 public final class PlayerScanner {
-
-    private static final Logger LOGGER = LogUtils.getLogger();
 
     // UUID string -> scan result
     private static final Map<String, PlayerScanResult> CACHE = new HashMap<>();
@@ -93,9 +88,7 @@ public final class PlayerScanner {
         Long previousSignature = SIGNATURE_CACHE.get(key);
         boolean changed = previousSignature == null || previousSignature.longValue() != signature;
         boolean missing = !CACHE.containsKey(key);
-        boolean stale = lastScan == Long.MIN_VALUE || (now - lastScan) >= maxStale;
-
-        if (missing || changed || stale) {
+        if (missing || changed) {
             scanPlayer(player);
             SIGNATURE_CACHE.put(key, signature);
             LAST_SCAN_TICK.put(key, now);
@@ -104,14 +97,29 @@ public final class PlayerScanner {
 
     public static void forceRescan(ServerPlayer player, long now) {
         if (player == null) return;
-        scanPlayer(player);
         String key = player.getUUID().toString();
+        PlayerScanResult cached = CACHE.get(key);
+        long lastTick = LAST_SCAN_TICK.getOrDefault(key, Long.MIN_VALUE);
+        if (cached != null && lastTick == now) {
+            return;
+        }
+        scanPlayer(player);
         SIGNATURE_CACHE.put(key, computePlayerSignature(player));
         LAST_SCAN_TICK.put(key, now);
     }
 
     /** Scan ONE player and update cache (does not write JSON). */
     public static PlayerScanResult scanPlayer(Player player) {
+        if (player == null) return null;
+        String key = player.getUUID().toString();
+        long now = (player instanceof ServerPlayer sp) ? sp.serverLevel().getGameTime() : Long.MIN_VALUE;
+
+        PlayerScanResult cached = CACHE.get(key);
+        long lastTick = LAST_SCAN_TICK.getOrDefault(key, Long.MIN_VALUE);
+        if (cached != null && now != Long.MIN_VALUE && lastTick == now) {
+            return cached;
+        }
+
         PlayerScanResult result = new PlayerScanResult(player.getName().getString());
 
         WeaponPower power = calculateWeaponPowers(player);
@@ -133,12 +141,10 @@ public final class PlayerScanner {
             AdaptiveHordes.scalingConfig.weaponDamageValue
         );
 
-        CACHE.put(player.getUUID().toString(), result);
-
-        LOGGER.info(ColorConstants.CYAN +
-            "Scanned " + result.name +
-            " | Gear Score: " + result.gearScore +
-            ColorConstants.RESET);
+        CACHE.put(key, result);
+        if (now != Long.MIN_VALUE) {
+            LAST_SCAN_TICK.put(key, now);
+        }
 
         return result;
     }
@@ -154,6 +160,16 @@ public final class PlayerScanner {
         forEachPlayerStack(player, stack -> {
             if (stack.isEmpty()) return;
 
+            WeaponOverrideEntry override = getManualWeaponOverride(stack);
+            if (override != null) {
+                if (override.ranged) {
+                    bestRanged[0] = Math.max(bestRanged[0], override.damage);
+                } else {
+                    bestMelee[0] = Math.max(bestMelee[0], override.damage);
+                }
+                return;
+            }
+
             if (isRangedWeapon(stack)) {
                 bestRanged[0] = Math.max(bestRanged[0], getRangedPower(player, stack));
                 return;
@@ -167,6 +183,24 @@ public final class PlayerScanner {
         wp.meleePower = bestMelee[0];
         wp.rangedPower = bestRanged[0];
         return wp;
+    }
+
+    private static WeaponOverrideEntry getManualWeaponOverride(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return null;
+        DefaultWeaponOverridesConfig cfg = AdaptiveHordes.weaponOverridesConfig;
+        if (cfg == null || cfg.overrides == null || cfg.overrides.isEmpty()) return null;
+
+        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        if (itemId == null || itemId.isBlank()) return null;
+
+        for (WeaponOverrideEntry entry : cfg.overrides) {
+            if (entry == null) continue;
+            if (entry.itemId == null || entry.itemId.isBlank()) continue;
+            if (!itemId.equals(entry.itemId)) continue;
+            if (!Double.isFinite(entry.damage) || entry.damage <= 0.0) continue;
+            return entry;
+        }
+        return null;
     }
 
     /** "Attack Damage" if this stack were held in MAINHAND. */

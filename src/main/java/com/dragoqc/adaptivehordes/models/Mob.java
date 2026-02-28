@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Mob {
-    public String name;
     public String entityId;      // "minecraft:zombie"
     public int baseHealth;
     public int baseDamage;
@@ -22,8 +21,7 @@ public class Mob {
 
     public Mob() {}
 
-    public Mob(String name, String entityId, int baseHealth, int baseDamage, float baseSpeed, boolean ranged) {
-        this.name = name;
+    public Mob(String entityId, int baseHealth, int baseDamage, float baseSpeed, boolean ranged) {
         this.entityId = entityId;
         this.baseHealth = baseHealth;
         this.baseDamage = baseDamage;

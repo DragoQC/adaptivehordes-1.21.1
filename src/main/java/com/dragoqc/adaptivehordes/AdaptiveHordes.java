@@ -27,6 +27,7 @@ public class AdaptiveHordes {
 	public static DefaultScalingConfig scalingConfig;
 	public static DefaultMobConfig mobConfig;
 	public static DefaultIgnoreConfig ignoreConfig;
+	public static DefaultWeaponOverridesConfig weaponOverridesConfig;
 
 	public AdaptiveHordes(IEventBus modEventBus, ModContainer modContainer) {
 		LOGGER.info(ColorConstants.GREEN + "Adaptive Horde is loading..." + ColorConstants.RESET);

@@ -27,7 +27,6 @@ public final class MobWaveDropsHandler {
 
         String waveName = entity.getPersistentData().getString(MobWaveSpawner.TAG_WAVE_NAME);
         String taggedEntityId = entity.getPersistentData().getString(MobWaveSpawner.TAG_WAVE_MOB_ENTITY_ID);
-        String mobName = entity.getPersistentData().getString(MobWaveSpawner.TAG_WAVE_MOB_NAME);
 
         if (waveName == null || waveName.isBlank()) {
             return;
@@ -43,10 +42,10 @@ public final class MobWaveDropsHandler {
 
         String realEntityId = BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
         String lookupEntityId = (taggedEntityId == null || taggedEntityId.isBlank()) ? realEntityId : taggedEntityId;
-        Mob mob = MobWave.findMobInWave(wave, lookupEntityId, mobName);
+        Mob mob = MobWave.findMobInWave(wave, lookupEntityId);
         if (mob == null) {
             // Fallback lookup by runtime entity id.
-            mob = MobWave.findMobInWave(wave, realEntityId, null);
+            mob = MobWave.findMobInWave(wave, realEntityId);
         }
         if (mob == null) return;
 
@@ -56,6 +55,12 @@ public final class MobWaveDropsHandler {
 
         applyConfiguredDrops(entity, event.getDrops(), wave.waveDrops);
         applyConfiguredDrops(entity, event.getDrops(), mob.drops);
+
+        // Refresh the player's bossbar immediately when a wave mob dies.
+        if (entity.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            String spawnId = entity.getPersistentData().getString(MobWaveSpawner.TAG_WAVE_SPAWN_ID);
+            MobWaveScheduler.refreshBossBarForSpawnId(serverLevel.getServer(), spawnId);
+        }
     }
 
     private static void applyConfiguredDrops(LivingEntity entity, Collection<ItemEntity> outDrops, List<Drop> configuredDrops) {

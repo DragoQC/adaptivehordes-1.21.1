@@ -6,12 +6,16 @@ import com.dragoqc.adaptivehordes.config.ConfigManager;
 import com.dragoqc.adaptivehordes.constants.ConfigConstants;
 import com.dragoqc.adaptivehordes.constants.ColorConstants;
 import com.dragoqc.adaptivehordes.mobwave.MobWave;
+import com.dragoqc.adaptivehordes.mobwave.MobWaveScheduler;
 import com.dragoqc.adaptivehordes.mobwave.MobWaveSpawner;
 import com.dragoqc.adaptivehordes.models.Mob;
 import com.dragoqc.adaptivehordes.models.PlayerScanResult;
 import com.dragoqc.adaptivehordes.models.Wave;
+import com.dragoqc.adaptivehordes.models.WeaponOverrideEntry;
 import com.dragoqc.adaptivehordes.playerscanner.PlayerScanner;
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -22,11 +26,13 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 import java.util.Collection;
@@ -36,6 +42,7 @@ import java.io.File;
 
 public final class AdaptiveHordesCommands {
     public static final String TAG_DISABLE_WAVE_ANNOUNCEMENTS = "adaptivehordes_disable_wave_announcements";
+    public static final String TAG_DISABLE_WAVE_BOSSBAR = "adaptivehordes_disable_wave_bossbar";
     private static final SuggestionProvider<CommandSourceStack> WAVE_NAME_SUGGESTIONS = (context, builder) ->
         SharedSuggestionProvider.suggest(getWaveNames(), builder);
 
@@ -49,6 +56,11 @@ public final class AdaptiveHordesCommands {
                 .then(Commands.literal("on").executes(AdaptiveHordesCommands::announcementOn))
                 .then(Commands.literal("off").executes(AdaptiveHordesCommands::announcementOff))
                 .then(Commands.literal("toggle").executes(AdaptiveHordesCommands::announcementToggle)))
+            .then(Commands.literal("bossbar")
+                .executes(AdaptiveHordesCommands::bossBarStatus)
+                .then(Commands.literal("on").executes(AdaptiveHordesCommands::bossBarOn))
+                .then(Commands.literal("off").executes(AdaptiveHordesCommands::bossBarOff))
+                .then(Commands.literal("toggle").executes(AdaptiveHordesCommands::bossBarToggle)))
             .then(Commands.literal("gearscore")
                 .executes(AdaptiveHordesCommands::gearscoreSelf)
                 .then(Commands.literal("all")
@@ -67,6 +79,34 @@ public final class AdaptiveHordesCommands {
                     .executes(AdaptiveHordesCommands::scanAllPlayers)
                     .then(Commands.argument("target", EntityArgument.player())
                         .executes(context -> scanPlayer(context, EntityArgument.getPlayer(context, "target"))))))
+            .then(Commands.literal("weaponoverride")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("addheld")
+                    .then(Commands.argument("damage", DoubleArgumentType.doubleArg(0.01D))
+                        .executes(context -> addHeldWeaponOverride(context, DoubleArgumentType.getDouble(context, "damage"), true))
+                        .then(Commands.argument("ranged", BoolArgumentType.bool())
+                            .executes(context -> addHeldWeaponOverride(
+                                context,
+                                DoubleArgumentType.getDouble(context, "damage"),
+                                BoolArgumentType.getBool(context, "ranged")
+                            )))))
+                .then(Commands.literal("removeheld")
+                    .executes(AdaptiveHordesCommands::removeHeldWeaponOverride))
+                .then(Commands.literal("remove")
+                    .then(Commands.argument("itemId", StringArgumentType.word())
+                        .executes(context -> removeWeaponOverrideById(context, StringArgumentType.getString(context, "itemId")))))
+                .then(Commands.literal("reset")
+                    .executes(AdaptiveHordesCommands::resetWeaponOverrides))
+                .then(Commands.literal("list")
+                    .executes(AdaptiveHordesCommands::listWeaponOverrides)))
+            .then(Commands.literal("debug")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("plans")
+                    .executes(AdaptiveHordesCommands::debugPlans))
+                .then(Commands.literal("player")
+                    .executes(AdaptiveHordesCommands::debugPlayerSelf)
+                    .then(Commands.argument("target", EntityArgument.player())
+                        .executes(context -> debugPlayerTarget(context, EntityArgument.getPlayer(context, "target"))))))
             .then(Commands.literal("waves")
                 .requires(source -> source.hasPermission(2))
                 .executes(AdaptiveHordesCommands::listWaves))
@@ -161,6 +201,48 @@ public final class AdaptiveHordesCommands {
         return Command.SINGLE_SUCCESS;
     }
 
+    private static int bossBarStatus(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = getSelfPlayer(context);
+        if (player == null) return 0;
+        boolean disabled = player.getPersistentData().getBoolean(TAG_DISABLE_WAVE_BOSSBAR);
+        Component msg = Component.literal("Adaptive Horde: wave boss bar is " + (disabled ? "OFF" : "ON"))
+            .withStyle(disabled ? ChatFormatting.RED : ChatFormatting.GREEN);
+        context.getSource().sendSuccess(() -> msg, false);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int bossBarOn(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = getSelfPlayer(context);
+        if (player == null) return 0;
+        player.getPersistentData().putBoolean(TAG_DISABLE_WAVE_BOSSBAR, false);
+        MobWaveScheduler.refreshBossBarVisibilityForPlayer(context.getSource().getServer(), player.getUUID());
+        context.getSource().sendSuccess(() -> Component.literal("Adaptive Horde: wave boss bar enabled.").withStyle(ChatFormatting.GREEN), false);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int bossBarOff(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = getSelfPlayer(context);
+        if (player == null) return 0;
+        player.getPersistentData().putBoolean(TAG_DISABLE_WAVE_BOSSBAR, true);
+        MobWaveScheduler.refreshBossBarVisibilityForPlayer(context.getSource().getServer(), player.getUUID());
+        context.getSource().sendSuccess(() -> Component.literal("Adaptive Horde: wave boss bar disabled.").withStyle(ChatFormatting.RED), false);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int bossBarToggle(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = getSelfPlayer(context);
+        if (player == null) return 0;
+        boolean nowDisabled = !player.getPersistentData().getBoolean(TAG_DISABLE_WAVE_BOSSBAR);
+        player.getPersistentData().putBoolean(TAG_DISABLE_WAVE_BOSSBAR, nowDisabled);
+        MobWaveScheduler.refreshBossBarVisibilityForPlayer(context.getSource().getServer(), player.getUUID());
+        context.getSource().sendSuccess(
+            () -> Component.literal("Adaptive Horde: wave boss bar is now " + (nowDisabled ? "OFF" : "ON"))
+                .withStyle(nowDisabled ? ChatFormatting.RED : ChatFormatting.GREEN),
+            false
+        );
+        return Command.SINGLE_SUCCESS;
+    }
+
     private static int reload(CommandSourceStack source) {
         try {
             ConfigManager.reloadAll();
@@ -217,8 +299,7 @@ public final class AdaptiveHordesCommands {
             double share = (totalWeight > 0.0) ? (weight / totalWeight) : 0.0;
             context.getSource().sendSuccess(
                 () -> Component.literal(
-                    "  - " + mob.name +
-                    " [" + mob.entityId + "]" +
+                    "  - " + mob.entityId +
                     " weightShare=" + percent(share) +
                     " spawnRange=" + percent(mob.spawnChanceMin) + ".." + percent(mob.spawnChanceMax) +
                     " armorChance=" + percent(mob.randomArmorChance) +
@@ -320,6 +401,29 @@ public final class AdaptiveHordesCommands {
         return sendGearscore(context.getSource(), self, false);
     }
 
+    private static int debugPlayerSelf(CommandContext<CommandSourceStack> context) {
+        ServerPlayer self = getSelfPlayer(context);
+        if (self == null) return 0;
+        return debugPlayer(context.getSource(), self);
+    }
+
+    private static int debugPlayerTarget(CommandContext<CommandSourceStack> context, ServerPlayer target) {
+        return debugPlayer(context.getSource(), target);
+    }
+
+    private static int debugPlans(CommandContext<CommandSourceStack> context) {
+        List<String> lines = MobWaveScheduler.getActivePlanDebugLines(context.getSource().getServer());
+        if (lines.isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.literal("Adaptive Horde: no active spawn plans.").withStyle(ChatFormatting.GRAY), false);
+            return Command.SINGLE_SUCCESS;
+        }
+        context.getSource().sendSuccess(() -> Component.literal("Adaptive Horde active plans: " + lines.size()).withStyle(ChatFormatting.AQUA), false);
+        for (String line : lines) {
+            context.getSource().sendSuccess(() -> Component.literal("  - " + line).withStyle(ChatFormatting.YELLOW), false);
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
     private static int gearscoreTarget(CommandContext<CommandSourceStack> context, ServerPlayer target) {
         return sendGearscore(context.getSource(), target, true);
     }
@@ -351,6 +455,27 @@ public final class AdaptiveHordesCommands {
                 ", ranged=" + format(result.arrowPower)
             ).withStyle(ChatFormatting.BLUE),
             broadcastToOps
+        );
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int debugPlayer(CommandSourceStack source, ServerPlayer target) {
+        PlayerScanResult result = PlayerScanner.ensurePlayerData(target, target.serverLevel().getGameTime());
+        if (result == null) {
+            source.sendFailure(Component.literal("Adaptive Horde: no live scan for " + target.getName().getString()).withStyle(ChatFormatting.RED));
+            return 0;
+        }
+        String dimensionId = target.serverLevel().dimension().location().toString();
+        Wave wave = MobWave.pickWaveForStrength(result.gearScore, dimensionId);
+        String waveName = (wave == null || wave.name == null) ? "<none>" : wave.name;
+        source.sendSuccess(
+            () -> Component.literal(
+                "Adaptive Horde debug player=" + target.getName().getString() +
+                " dim=" + dimensionId +
+                " gearScore=" + result.gearScore +
+                " wave=" + waveName
+            ).withStyle(ChatFormatting.AQUA),
+            false
         );
         return Command.SINGLE_SUCCESS;
     }
@@ -421,12 +546,158 @@ public final class AdaptiveHordesCommands {
         deleteIfExists(new File(configDir, ConfigConstants.SCALING_CONFIG_FILE));
         deleteIfExists(new File(configDir, ConfigConstants.MOB_CONFIG_FILE));
         deleteIfExists(new File(configDir, ConfigConstants.IGNORE_CONFIG_FILE));
+        deleteIfExists(new File(configDir, ConfigConstants.WEAPON_OVERRIDES_CONFIG_FILE));
         deleteIfExists(new File(configDir, ConfigConstants.WAVES_CONFIG_FILE));
 
         ConfigManager.reloadAll();
         logCommand(context.getSource(), "delete config", "confirmed x3; recreated defaults from code");
         context.getSource().sendSuccess(
             () -> Component.literal("Adaptive Horde: config files deleted and reset to code defaults.").withStyle(ChatFormatting.RED),
+            true
+        );
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int addHeldWeaponOverride(CommandContext<CommandSourceStack> context, double damage, boolean ranged) {
+        ServerPlayer player = getSelfPlayer(context);
+        if (player == null) return 0;
+
+        ItemStack held = player.getMainHandItem();
+        if (held == null || held.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("Adaptive Horde: hold an item in your main hand.").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        if (AdaptiveHordes.weaponOverridesConfig == null) {
+            context.getSource().sendFailure(Component.literal("Adaptive Horde: weapon override config not initialized.").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+        if (AdaptiveHordes.weaponOverridesConfig.overrides == null) {
+            AdaptiveHordes.weaponOverridesConfig.overrides = new java.util.ArrayList<>();
+        }
+
+        String itemId = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        WeaponOverrideEntry found = null;
+        for (WeaponOverrideEntry entry : AdaptiveHordes.weaponOverridesConfig.overrides) {
+            if (entry != null && itemId.equals(entry.itemId)) {
+                found = entry;
+                break;
+            }
+        }
+        if (found == null) {
+            found = new WeaponOverrideEntry();
+            found.itemId = itemId;
+            AdaptiveHordes.weaponOverridesConfig.overrides.add(found);
+        }
+
+        found.ranged = ranged;
+        found.damage = damage;
+        ConfigManager.saveWeaponOverridesConfig();
+        PlayerScanner.forceRescan(player, player.serverLevel().getGameTime());
+
+        logCommand(context.getSource(), "weaponoverride addheld", itemId + " damage=" + format(damage) + " ranged=" + ranged);
+        context.getSource().sendSuccess(
+            () -> Component.literal(
+                "Adaptive Horde: override saved -> " + itemId +
+                " damage=" + format(damage) +
+                " ranged=" + ranged
+            ).withStyle(ChatFormatting.GREEN),
+            true
+        );
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int removeHeldWeaponOverride(CommandContext<CommandSourceStack> context) {
+        ServerPlayer player = getSelfPlayer(context);
+        if (player == null) return 0;
+        ItemStack held = player.getMainHandItem();
+        if (held == null || held.isEmpty()) {
+            context.getSource().sendFailure(Component.literal("Adaptive Horde: hold an item in your main hand.").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+        String itemId = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+        return removeWeaponOverride(context.getSource(), itemId, player);
+    }
+
+    private static int removeWeaponOverrideById(CommandContext<CommandSourceStack> context, String itemId) {
+        return removeWeaponOverride(context.getSource(), itemId, getSelfPlayer(context));
+    }
+
+    private static int removeWeaponOverride(CommandSourceStack source, String itemId, ServerPlayer actor) {
+        if (itemId == null || itemId.isBlank()) {
+            source.sendFailure(Component.literal("Adaptive Horde: invalid item id.").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+        if (AdaptiveHordes.weaponOverridesConfig == null || AdaptiveHordes.weaponOverridesConfig.overrides == null) {
+            source.sendFailure(Component.literal("Adaptive Horde: weapon override config not initialized.").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        boolean removed = AdaptiveHordes.weaponOverridesConfig.overrides.removeIf(e -> e != null && itemId.equals(e.itemId));
+        if (!removed) {
+            source.sendFailure(Component.literal("Adaptive Horde: no override found for " + itemId).withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        ConfigManager.saveWeaponOverridesConfig();
+        if (actor != null) {
+            PlayerScanner.forceRescan(actor, actor.serverLevel().getGameTime());
+        }
+        logCommand(source, "weaponoverride remove", itemId);
+        source.sendSuccess(() -> Component.literal("Adaptive Horde: removed override for " + itemId).withStyle(ChatFormatting.GOLD), true);
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int listWeaponOverrides(CommandContext<CommandSourceStack> context) {
+        if (AdaptiveHordes.weaponOverridesConfig == null || AdaptiveHordes.weaponOverridesConfig.overrides == null || AdaptiveHordes.weaponOverridesConfig.overrides.isEmpty()) {
+            context.getSource().sendSuccess(() -> Component.literal("Adaptive Horde: no weapon overrides configured.").withStyle(ChatFormatting.GRAY), false);
+            return Command.SINGLE_SUCCESS;
+        }
+
+        context.getSource().sendSuccess(
+            () -> Component.literal("Adaptive Horde weapon overrides: " + AdaptiveHordes.weaponOverridesConfig.overrides.size()).withStyle(ChatFormatting.AQUA),
+            false
+        );
+        for (WeaponOverrideEntry entry : AdaptiveHordes.weaponOverridesConfig.overrides) {
+            if (entry == null || entry.itemId == null || entry.itemId.isBlank()) continue;
+            context.getSource().sendSuccess(
+                () -> Component.literal(
+                    "  - " + entry.itemId +
+                    " | damage=" + format(entry.damage) +
+                    " | ranged=" + entry.ranged
+                ).withStyle(ChatFormatting.YELLOW),
+                false
+            );
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    private static int resetWeaponOverrides(CommandContext<CommandSourceStack> context) {
+        File configDir = JsonFileHelper.getConfigDirectory();
+        if (configDir == null) {
+            context.getSource().sendFailure(Component.literal("Adaptive Horde: config directory is not initialized.").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        File weaponOverridesFile = new File(configDir, ConfigConstants.WEAPON_OVERRIDES_CONFIG_FILE);
+        if (weaponOverridesFile.exists() && !weaponOverridesFile.delete()) {
+            context.getSource().sendFailure(Component.literal("Adaptive Horde: could not delete WeaponOverrides.json").withStyle(ChatFormatting.RED));
+            return 0;
+        }
+
+        ConfigManager.reloadWeaponOverrides();
+
+        MinecraftServer server = context.getSource().getServer();
+        if (server != null && server.overworld() != null) {
+            long now = server.overworld().getGameTime();
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                PlayerScanner.forceRescan(player, now);
+            }
+        }
+
+        logCommand(context.getSource(), "weaponoverride reset", "WeaponOverrides.json deleted and recreated defaults");
+        context.getSource().sendSuccess(
+            () -> Component.literal("Adaptive Horde: weapon overrides reset and live scans refreshed.").withStyle(ChatFormatting.GOLD),
             true
         );
         return Command.SINGLE_SUCCESS;

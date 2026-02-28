@@ -22,6 +22,7 @@ import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.ArrayList;
@@ -34,7 +35,6 @@ public final class MobWaveSpawner {
     public static final String TAG_WAVE_SPAWNED = "adaptivehordes_wave_spawned";
     public static final String TAG_WAVE_NAME = "adaptivehordes_wave_name";
     public static final String TAG_WAVE_MOB_ENTITY_ID = "adaptivehordes_wave_mob_entity_id";
-    public static final String TAG_WAVE_MOB_NAME = "adaptivehordes_wave_mob_name";
     public static final String TAG_WAVE_MOB_RANGED = "adaptivehordes_wave_mob_ranged";
     public static final String TAG_WAVE_SPAWN_ID = "adaptivehordes_wave_spawn_id";
     public static final String TAG_PRIMARY_TARGET_UUID = "adaptivehordes_primary_target_uuid";
@@ -51,12 +51,11 @@ public final class MobWaveSpawner {
     /**
      * Tag entities spawned by the wave system so custom drops only affect them.
      */
-    public static void markWaveSpawnedMob(net.minecraft.world.entity.LivingEntity entity, String waveName, String mobEntityId, String mobName) {
+    public static void markWaveSpawnedMob(net.minecraft.world.entity.LivingEntity entity, String waveName, String mobEntityId) {
         CompoundTag tag = entity.getPersistentData();
         tag.putBoolean(TAG_WAVE_SPAWNED, true);
         if (waveName != null) tag.putString(TAG_WAVE_NAME, waveName);
         if (mobEntityId != null) tag.putString(TAG_WAVE_MOB_ENTITY_ID, mobEntityId);
-        if (mobName != null) tag.putString(TAG_WAVE_MOB_NAME, mobName);
     }
 
     public static void forceWaveTarget(net.minecraft.world.entity.Mob mob, ServerPlayer targetPlayer) {
@@ -178,7 +177,7 @@ public final class MobWaveSpawner {
         mob.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.EVENT, null);
 
         applyMobStats(mob, template, wave, scan);
-        markWaveSpawnedMob(mob, wave.name, template.entityId, template.name);
+        markWaveSpawnedMob(mob, wave.name, template.entityId);
         tagRuntimeData(mob, spawnId, targetPlayer);
         mob.getPersistentData().putBoolean(TAG_WAVE_MOB_RANGED, template.ranged);
 
@@ -198,6 +197,10 @@ public final class MobWaveSpawner {
     }
 
     private static BlockPos findSpawnPos(ServerLevel level, BlockPos center) {
+        if (!level.dimension().equals(Level.OVERWORLD)) {
+            return findSpawnPosInCavernDimensions(level, center);
+        }
+
         int minDist = Math.max(4, AdaptiveHordes.mobConfig.spawnMinDistance);
         int maxDist = Math.max(minDist + 1, AdaptiveHordes.mobConfig.spawnMaxDistance);
         int attempts = Math.max(4, AdaptiveHordes.mobConfig.spawnPositionAttempts);
@@ -215,6 +218,40 @@ public final class MobWaveSpawner {
             return top;
         }
 
+        return null;
+    }
+
+    private static BlockPos findSpawnPosInCavernDimensions(ServerLevel level, BlockPos center) {
+        int minDist = Math.max(4, AdaptiveHordes.mobConfig.spawnMinDistance);
+        int maxDist = Math.max(minDist + 1, AdaptiveHordes.mobConfig.spawnMaxDistance);
+        int attempts = Math.max(8, AdaptiveHordes.mobConfig.spawnPositionAttempts * 2);
+        int minY = level.getMinBuildHeight() + 1;
+        int maxY = level.getMaxBuildHeight() - 3;
+
+        for (int i = 0; i < attempts; i++) {
+            double angle = ThreadLocalRandom.current().nextDouble(0.0, Math.PI * 2.0);
+            double radius = ThreadLocalRandom.current().nextDouble(minDist, maxDist);
+            int x = center.getX() + Mth.floor(Math.cos(angle) * radius);
+            int z = center.getZ() + Mth.floor(Math.sin(angle) * radius);
+
+            int baseY = Mth.clamp(center.getY() + ThreadLocalRandom.current().nextInt(-8, 9), minY, maxY);
+            int yStart = Math.min(maxY, baseY + 12);
+            int yEnd = Math.max(minY, baseY - 12);
+
+            for (int y = yStart; y >= yEnd; y--) {
+                BlockPos ground = new BlockPos(x, y, z);
+                BlockPos spawn = ground.above();
+                BlockPos head = spawn.above();
+
+                if (!level.getWorldBorder().isWithinBounds(spawn)) continue;
+                if (level.getBlockState(ground).isAir()) continue;
+                if (!level.getBlockState(ground).blocksMotion()) continue;
+                if (!level.getBlockState(spawn).isAir()) continue;
+                if (!level.getBlockState(head).isAir()) continue;
+
+                return spawn;
+            }
+        }
         return null;
     }
 

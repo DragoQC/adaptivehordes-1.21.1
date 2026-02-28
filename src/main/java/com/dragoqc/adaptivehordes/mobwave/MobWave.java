@@ -92,10 +92,31 @@ public final class MobWave {
         List<Wave> waves = getAll();
         if (waves.isEmpty()) return null;
 
+        // If a dimension is specified, keep selection inside that dimension first.
+        if (!isBlank(dimensionId)) {
+            List<Wave> dimensionPool = new ArrayList<>();
+            for (Wave w : waves) {
+                if (w == null) continue;
+                if (isWaveAllowedInDimension(w, dimensionId)) {
+                    dimensionPool.add(w);
+                }
+            }
+
+            // No wave configured for this dimension: fallback to global behavior.
+            if (!dimensionPool.isEmpty()) {
+                return pickFromPoolByStrength(strength, dimensionPool);
+            }
+        }
+
+        return pickFromPoolByStrength(strength, waves);
+    }
+
+    private static Wave pickFromPoolByStrength(int strength, List<Wave> pool) {
+        if (pool == null || pool.isEmpty()) return null;
+
         List<Wave> eligible = new ArrayList<>();
-        for (Wave w : waves) {
+        for (Wave w : pool) {
             if (w == null) continue;
-            if (!isWaveAllowedInDimension(w, dimensionId)) continue;
             if (w.strengthRequirement <= strength) {
                 eligible.add(w);
             } else {
@@ -104,7 +125,8 @@ public final class MobWave {
         }
 
         if (eligible.isEmpty()) {
-            return waves.get(0);
+            // Fallback to the lowest requirement wave from this pool.
+            return pool.get(0);
         }
 
         int maxEligibleRequirement = eligible.get(eligible.size() - 1).strengthRequirement;
@@ -188,12 +210,11 @@ public final class MobWave {
         return null;
     }
 
-    public static Mob findMobInWave(Wave wave, String entityId, String mobName) {
+    public static Mob findMobInWave(Wave wave, String entityId) {
         if (wave == null || wave.waveContent == null) return null;
         for (Mob mob : wave.waveContent) {
             if (mob == null) continue;
             if (entityId != null && !entityId.equals(mob.entityId)) continue;
-            if (!isBlank(mobName) && !mobName.equals(mob.name)) continue;
             return mob;
         }
         return null;
@@ -222,6 +243,11 @@ public final class MobWave {
             if (isBlank(wave.name)) {
                 wave.name = "wave_" + i;
                 logWarn(wavePath + ".name", "Missing/blank; set to '" + wave.name + "'.");
+                changed = true;
+            }
+            if (isBlank(wave.displayName)) {
+                wave.displayName = toDisplayName(wave.name);
+                logWarn(wavePath + ".displayName", "Missing/blank; set to '" + wave.displayName + "'.");
                 changed = true;
             }
             if (isBlank(wave.waveSpawningMessage)) {
@@ -357,11 +383,6 @@ public final class MobWave {
                     continue;
                 }
 
-                if (isBlank(mob.name)) {
-                    mob.name = entityKey.toString();
-                    logWarn(mobPath + ".name", "Missing/blank; set to entity id.");
-                    changed = true;
-                }
                 if (!Double.isFinite(mob.presenceWeight) || mob.presenceWeight < 0.0) {
                     mob.presenceWeight = 1.0;
                     logWarn(mobPath + ".presenceWeight", "Invalid; set to 1.0.");
@@ -497,6 +518,19 @@ public final class MobWave {
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private static String toDisplayName(String codeName) {
+        if (isBlank(codeName)) return "Wave";
+        String[] parts = codeName.replace('-', ' ').replace('_', ' ').trim().split("\\s+");
+        StringBuilder out = new StringBuilder();
+        for (String p : parts) {
+            if (p.isEmpty()) continue;
+            if (!out.isEmpty()) out.append(' ');
+            out.append(Character.toUpperCase(p.charAt(0)));
+            if (p.length() > 1) out.append(p.substring(1));
+        }
+        return out.toString();
     }
 
     public static String normalizeDropMode(String mode) {

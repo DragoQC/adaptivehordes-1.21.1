@@ -5,6 +5,7 @@ import java.util.List;
 
 public class Wave {
     public String name = "wave";
+    public String displayName = "Wave";
     public String waveSpawningMessage = "A horde is spawning: {wave} targeting {player}!";
     public List<String> dimensions = new ArrayList<>(); // empty = all dimensions
     public int strengthRequirement = 0; // min player strength for this wave to be eligible

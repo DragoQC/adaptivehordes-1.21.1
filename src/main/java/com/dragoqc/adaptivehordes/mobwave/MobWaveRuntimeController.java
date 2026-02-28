@@ -32,12 +32,12 @@ public final class MobWaveRuntimeController {
         CompoundTag tag = mob.getPersistentData();
         long now = level.getGameTime();
         if (isExpired(now, tag)) {
-            mob.discard();
+            discardAndRefresh(level, mob, tag);
             return;
         }
 
         if (isTooFarFromAssignedTarget(level, mob, tag)) {
-            mob.discard();
+            discardAndRefresh(level, mob, tag);
             return;
         }
 
@@ -47,7 +47,7 @@ public final class MobWaveRuntimeController {
 
         updateStuckState(now, mob, tag);
         if (tag.getInt(MobWaveSpawner.TAG_STUCK_TICKS) >= Math.max(40, AdaptiveHordes.mobConfig.maxStuckTicks)) {
-            mob.discard();
+            discardAndRefresh(level, mob, tag);
             return;
         }
 
@@ -176,5 +176,11 @@ public final class MobWaveRuntimeController {
         } catch (Exception ex) {
             return Optional.empty();
         }
+    }
+
+    private static void discardAndRefresh(ServerLevel level, Mob mob, CompoundTag tag) {
+        String spawnId = tag.getString(MobWaveSpawner.TAG_WAVE_SPAWN_ID);
+        mob.discard();
+        MobWaveScheduler.refreshBossBarForSpawnId(level.getServer(), spawnId);
     }
 }
