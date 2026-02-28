@@ -8,7 +8,6 @@ public class DefaultScalingConfig {
     public String _about = "Player power scoring settings used by wave selection.";
     public Map<String, String> _keyInfo = new LinkedHashMap<>();
 
-    public double gearScoreMultiplier = 1.5;
     public int armorPointValue = 10;
     public int enchantmentValue = 5;
     public int weaponDamageValue = 20;
@@ -34,7 +33,6 @@ public class DefaultScalingConfig {
     public Map<String, Double> rangedWeaponOverrides = new HashMap<>();
     
     public DefaultScalingConfig() {
-        _keyInfo.put("gearScoreMultiplier", "Global multiplier on final gear score (future use; keep >= 0).");
         _keyInfo.put("armorPointValue", "Points per armor point.");
         _keyInfo.put("enchantmentValue", "Points per enchanted item.");
         _keyInfo.put("weaponDamageValue", "Points per weapon damage unit.");

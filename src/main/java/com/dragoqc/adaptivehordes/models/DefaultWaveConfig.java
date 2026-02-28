@@ -31,9 +31,7 @@ public class DefaultWaveConfig {
         _keyInfo.put("waves[].waveContent[].amountMultiplier", "Additional per-mob amount weight multiplier.");
         _keyInfo.put("waves[].waveContent[].spawnChanceMin", "Min per-spawn-cycle chance for this mob to be active.");
         _keyInfo.put("waves[].waveContent[].spawnChanceMax", "Max per-spawn-cycle chance for this mob to be active.");
-        _keyInfo.put("waves[].waveContent[].nameVisible", "true/false: if true, mob custom name is always visible.");
         _keyInfo.put("waves[].waveContent[].baby", "true/false: try spawning as baby (only works for supported mobs).");
-        _keyInfo.put("waves[].waveContent[].mountEntityId", "Optional living entity id used as mount (example: creeper on bat). Also accepts mountEntityID.");
         _keyInfo.put("waves[].waveContent[].randomArmorChance", "0.0..1.0 chance this mob gets random armor pieces.");
         _keyInfo.put("waves[].waveContent[].randomArmorMaxPieces", "1..4 max random armor pieces equipped when chance passes.");
         _keyInfo.put("waves[].waveContent[].dropsMode", "How custom drops combine with vanilla drops.");
@@ -65,11 +63,11 @@ public class DefaultWaveConfig {
             mob("Boom Creeper", "minecraft:creeper", 20, 0, 0.25f, false, 1.4, 1.2, 0.65, 1.00)
                 .addDrop(drop("minecraft:gunpowder", 1, 6, 0.72f))
                 .addDrop(drop("minecraft:tnt", 0, 1, 0.20f)),
-            mob("Boom Bat Rider", "minecraft:creeper", 18, 0, 0.27f, false, 1.15, 1.0, 0.55, 0.95, false, "minecraft:bat")
+            mob("Boom Creeper Elite", "minecraft:creeper", 22, 0, 0.27f, false, 1.15, 1.0, 0.55, 0.95)
                 .addDrop(drop("minecraft:gunpowder", 0, 4, 0.58f)),
-            mob("Bomber Jockey", "minecraft:zombie", 22, 5, 0.31f, false, 0.8, 0.9, 0.30, 0.70, true, "minecraft:bat")
+            mob("Bomber Zombie", "minecraft:zombie", 22, 5, 0.31f, false, 0.8, 0.9, 0.30, 0.70, true)
                 .addDrop(drop("minecraft:gunpowder", 0, 2, 0.35f)),
-            mob("Boom Skeleton Jockey", "minecraft:skeleton", 20, 4, 0.29f, true, 0.75, 0.95, 0.30, 0.75, false, "minecraft:bat")
+            mob("Boom Skeleton", "minecraft:skeleton", 20, 4, 0.29f, true, 0.75, 0.95, 0.30, 0.75)
                 .addDrop(drop("minecraft:arrow", 0, 4, 0.45f))
         ), 0.78, 1.30));
 
@@ -84,7 +82,7 @@ public class DefaultWaveConfig {
             armor(mob("Brute Piglin", "minecraft:piglin_brute", 38, 10, 0.28f, false, 1.0, 1.2, 0.55, 0.95), 0.35, 3)
                 .addDrop(drop("minecraft:gold_ingot", 0, 2, 0.30f)),
             mob("Hoglin Charger", "minecraft:hoglin", 44, 11, 0.30f, false, 0.9, 1.2, 0.45, 0.85),
-            armor(mob("Piglin Jockey", "minecraft:piglin", 24, 6, 0.31f, false, 0.7, 1.0, 0.25, 0.65, false, "minecraft:hoglin"), 0.25, 3)
+            armor(mob("Piglin Skirmisher", "minecraft:piglin", 24, 6, 0.31f, false, 0.7, 1.0, 0.25, 0.65), 0.25, 3)
         ), 0.52, 1.85));
 
         waves.add(wave("nether_burn", "minecraft:the_nether", 760, List.of(
@@ -133,7 +131,7 @@ public class DefaultWaveConfig {
         double spawnChanceMin,
         double spawnChanceMax
     ) {
-        return mob(name, entityId, baseHealth, baseDamage, baseSpeed, ranged, presenceWeight, amountMultiplier, spawnChanceMin, spawnChanceMax, false, null);
+        return mob(name, entityId, baseHealth, baseDamage, baseSpeed, ranged, presenceWeight, amountMultiplier, spawnChanceMin, spawnChanceMax, false);
     }
 
     private static Mob mob(
@@ -147,8 +145,7 @@ public class DefaultWaveConfig {
         double amountMultiplier,
         double spawnChanceMin,
         double spawnChanceMax,
-        boolean baby,
-        String mountEntityId
+        boolean baby
     ) {
         Mob mob = new Mob(name, entityId, baseHealth, baseDamage, baseSpeed, ranged);
         mob.presenceWeight = presenceWeight;
@@ -156,7 +153,6 @@ public class DefaultWaveConfig {
         mob.spawnChanceMin = spawnChanceMin;
         mob.spawnChanceMax = spawnChanceMax;
         mob.baby = baby;
-        mob.mountEntityId = mountEntityId;
         return mob;
     }
 

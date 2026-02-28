@@ -10,7 +10,6 @@ import com.dragoqc.adaptivehordes.models.Mob;
 import com.dragoqc.adaptivehordes.models.Wave;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.LivingEntity;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -404,21 +403,6 @@ public final class MobWave {
                 if (!normalizedDropMode.equals(mob.dropsMode)) {
                     logWarn(mobPath + ".dropsMode", "Invalid value '" + mob.dropsMode + "'; set to '" + normalizedDropMode + "'.");
                     mob.dropsMode = normalizedDropMode;
-                    changed = true;
-                }
-                if (!isBlank(mob.mountEntityId)) {
-                    ResourceLocation mountKey = ResourceLocation.tryParse(mob.mountEntityId);
-                    if (mountKey == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(mountKey)) {
-                        logWarn(mobPath + ".mountEntityId", "Unknown mount entity id '" + mob.mountEntityId + "'; cleared.");
-                        mob.mountEntityId = null;
-                        changed = true;
-                    } else if (!LivingEntity.class.isAssignableFrom(BuiltInRegistries.ENTITY_TYPE.get(mountKey).getBaseClass())) {
-                        logWarn(mobPath + ".mountEntityId", "Mount id '" + mob.mountEntityId + "' is not a living entity; cleared.");
-                        mob.mountEntityId = null;
-                        changed = true;
-                    }
-                } else if (mob.mountEntityId != null) {
-                    mob.mountEntityId = null;
                     changed = true;
                 }
                 if (!Double.isFinite(mob.randomArmorChance)) {

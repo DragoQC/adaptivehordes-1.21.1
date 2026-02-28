@@ -1,7 +1,6 @@
 package com.dragoqc.adaptivehordes.mobwave;
 
 import com.dragoqc.adaptivehordes.AdaptiveHordes;
-import com.dragoqc.adaptivehordes.constants.ColorConstants;
 import com.dragoqc.adaptivehordes.models.Mob;
 import com.dragoqc.adaptivehordes.models.PlayerScanResult;
 import com.dragoqc.adaptivehordes.models.Wave;
@@ -14,7 +13,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -53,7 +51,7 @@ public final class MobWaveSpawner {
     /**
      * Tag entities spawned by the wave system so custom drops only affect them.
      */
-    public static void markWaveSpawnedMob(LivingEntity entity, String waveName, String mobEntityId, String mobName) {
+    public static void markWaveSpawnedMob(net.minecraft.world.entity.LivingEntity entity, String waveName, String mobEntityId, String mobName) {
         CompoundTag tag = entity.getPersistentData();
         tag.putBoolean(TAG_WAVE_SPAWNED, true);
         if (waveName != null) tag.putString(TAG_WAVE_NAME, waveName);
@@ -70,7 +68,7 @@ public final class MobWaveSpawner {
         }
     }
 
-    public static boolean isWaveSpawnedMob(LivingEntity entity) {
+    public static boolean isWaveSpawnedMob(net.minecraft.world.entity.LivingEntity entity) {
         return entity.getPersistentData().getBoolean(TAG_WAVE_SPAWNED);
     }
 
@@ -187,43 +185,13 @@ public final class MobWaveSpawner {
         mob.setPersistenceRequired();
         forceWaveTarget(mob, targetPlayer);
 
-        LivingEntity mount = tryCreateMount(level, template, spawnPos, targetPlayer, wave, spawnId);
         if (!level.noCollision(mob)) {
-            mob.discard();
-            return false;
-        }
-        if (mount != null && !level.noCollision(mount)) {
-            mount.discard();
             mob.discard();
             return false;
         }
 
         if (!level.addFreshEntity(mob)) {
-            if (mount != null) {
-                mount.discard();
-            }
             return false;
-        }
-
-        if (mount != null) {
-            mount.moveTo(mob.getX(), mob.getY(), mob.getZ(), mount.getYRot(), mount.getXRot());
-            if (!level.addFreshEntity(mount)) {
-                mob.discard();
-                return false;
-            }
-
-            boolean mounted = mob.startRiding(mount, true);
-            if (!mounted) {
-                mob.moveTo(mount.getX(), mount.getY(), mount.getZ(), mob.getYRot(), mob.getXRot());
-                mounted = mob.startRiding(mount, true);
-            }
-            if (!mounted) {
-                AdaptiveHordes.LOGGER.warn(ColorConstants.YELLOW +
-                    "[MobWaveSpawner] Failed to mount rider '" + template.entityId +
-                    "' on mount '" + template.mountEntityId + "' in wave '" + wave.name + "'." +
-                    ColorConstants.RESET);
-                mount.discard();
-            }
         }
 
         return true;
@@ -380,46 +348,6 @@ public final class MobWaveSpawner {
         tag.putDouble(TAG_LAST_POS_Y, mob.getY());
         tag.putDouble(TAG_LAST_POS_Z, mob.getZ());
         tag.putLong(TAG_LAST_STUCK_CHECK_GAME_TIME, mob.level().getGameTime());
-        tag.putInt(TAG_STUCK_TICKS, 0);
-    }
-
-    private static LivingEntity tryCreateMount(ServerLevel level, Mob template, BlockPos spawnPos, ServerPlayer targetPlayer, Wave wave, UUID spawnId) {
-        if (template.mountEntityId == null || template.mountEntityId.isBlank()) return null;
-
-        ResourceLocation mountKey = ResourceLocation.tryParse(template.mountEntityId);
-        if (mountKey == null) return null;
-        var mountType = BuiltInRegistries.ENTITY_TYPE.get(mountKey);
-        if (mountType == null) return null;
-
-        Entity rawMount = mountType.create(level);
-        if (!(rawMount instanceof LivingEntity mount)) return null;
-
-        mount.moveTo(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, level.random.nextFloat() * 360.0f, 0.0f);
-        if (mount instanceof net.minecraft.world.entity.Mob mobMountInit) {
-            mobMountInit.finalizeSpawn(level, level.getCurrentDifficultyAt(spawnPos), MobSpawnType.EVENT, null);
-        }
-        markWaveSpawnedMob(mount, wave.name, template.mountEntityId, "mount:" + template.name);
-        if (mount instanceof net.minecraft.world.entity.Mob mobMount) {
-            forceWaveTarget(mobMount, targetPlayer);
-            mobMount.setPersistenceRequired();
-        }
-        if (mount instanceof PathfinderMob pathMob) {
-            tagRuntimeData(pathMob, spawnId, targetPlayer);
-        } else {
-            tagRuntimeData(mount, spawnId, targetPlayer);
-        }
-        return mount;
-    }
-
-    private static void tagRuntimeData(LivingEntity entity, UUID spawnId, ServerPlayer targetPlayer) {
-        CompoundTag tag = entity.getPersistentData();
-        tag.putString(TAG_WAVE_SPAWN_ID, spawnId.toString());
-        tag.putString(TAG_PRIMARY_TARGET_UUID, targetPlayer.getUUID().toString());
-        tag.putLong(TAG_SPAWN_GAME_TIME, entity.level().getGameTime());
-        tag.putDouble(TAG_LAST_POS_X, entity.getX());
-        tag.putDouble(TAG_LAST_POS_Y, entity.getY());
-        tag.putDouble(TAG_LAST_POS_Z, entity.getZ());
-        tag.putLong(TAG_LAST_STUCK_CHECK_GAME_TIME, entity.level().getGameTime());
         tag.putInt(TAG_STUCK_TICKS, 0);
     }
 

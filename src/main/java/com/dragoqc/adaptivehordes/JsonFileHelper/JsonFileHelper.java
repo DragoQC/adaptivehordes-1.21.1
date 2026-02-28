@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -23,12 +22,6 @@ public final class JsonFileHelper {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static File configDirectory;
-    private static final Map<String, String> KEY_ALIASES = new LinkedHashMap<>();
-
-    static {
-        // Backward-compatible key aliases used by existing user configs.
-        KEY_ALIASES.put("mountEntityID", "mountEntityId");
-    }
 
     private JsonFileHelper() { }
 
@@ -111,9 +104,6 @@ public final class JsonFileHelper {
     private static boolean repairObjectToSchema(JsonObject fileJson, JsonObject schemaJson, RepairStats stats) {
         boolean changed = false;
 
-        // Migrate known legacy aliases before unknown-key removal.
-        changed |= migrateAliases(fileJson, schemaJson);
-
         // 1) Remove unknown keys (renamed/old fields)
         Iterator<Map.Entry<String, JsonElement>> it = fileJson.entrySet().iterator();
         while (it.hasNext()) {
@@ -144,22 +134,6 @@ public final class JsonFileHelper {
             }
         }
 
-        return changed;
-    }
-
-    private static boolean migrateAliases(JsonObject fileJson, JsonObject schemaJson) {
-        boolean changed = false;
-        for (Map.Entry<String, String> alias : KEY_ALIASES.entrySet()) {
-            String legacyKey = alias.getKey();
-            String canonicalKey = alias.getValue();
-            if (!fileJson.has(legacyKey)) continue;
-            if (!schemaJson.has(canonicalKey)) continue;
-            if (fileJson.has(canonicalKey)) continue;
-
-            fileJson.add(canonicalKey, fileJson.get(legacyKey));
-            fileJson.remove(legacyKey);
-            changed = true;
-        }
         return changed;
     }
 

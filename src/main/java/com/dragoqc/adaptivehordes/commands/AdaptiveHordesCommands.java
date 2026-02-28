@@ -223,7 +223,6 @@ public final class AdaptiveHordesCommands {
                     " spawnRange=" + percent(mob.spawnChanceMin) + ".." + percent(mob.spawnChanceMax) +
                     " armorChance=" + percent(mob.randomArmorChance) +
                     " armorMaxPieces=" + mob.randomArmorMaxPieces +
-                    " mount=" + (mob.mountEntityId == null || mob.mountEntityId.isBlank() ? "none" : mob.mountEntityId) +
                     " dropsMode=" + mob.dropsMode
                 ).withStyle(ChatFormatting.YELLOW),
                 false
