@@ -1,10 +1,17 @@
 package com.dragoqc.adaptivehordes.models;
 
 public class Drop {
-	public final String itemId; // "minecraft:iron_ingot"
-	public final int minCount;
-	public final int maxCount;
-	public final float chance; // 0.0 to 1.0
+	public String itemId; // "minecraft:iron_ingot"
+	public int minCount;
+	public int maxCount;
+	public float chance; // 0.0 to 1.0
 
 	public Drop() {}
+
+	public Drop(String itemId, int minCount, int maxCount, float chance) {
+		this.itemId = itemId;
+		this.minCount = minCount;
+		this.maxCount = maxCount;
+		this.chance = chance;
+	}
 }

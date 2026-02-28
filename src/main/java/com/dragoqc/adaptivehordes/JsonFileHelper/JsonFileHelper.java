@@ -10,15 +10,25 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.util.LinkedHashMap;
 import java.util.Iterator;
 import java.util.Map;
 
 public final class JsonFileHelper {
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder()
+        .setPrettyPrinting()
+        .serializeNulls()
+        .create();
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static File configDirectory;
+    private static final Map<String, String> KEY_ALIASES = new LinkedHashMap<>();
+
+    static {
+        // Backward-compatible key aliases used by existing user configs.
+        KEY_ALIASES.put("mountEntityID", "mountEntityId");
+    }
 
     private JsonFileHelper() { }
 
@@ -43,7 +53,7 @@ public final class JsonFileHelper {
     }
 
     // ------------------------------------------------------------------------
-    // LOAD / CREATE (REPAIR FIELD NAMES + ADD MISSING FIELDS)
+    // LOAD / CREATE (REPAIR FIELD NAMES + TYPES + MISSING FIELDS)
     // ------------------------------------------------------------------------
     public static <T> T loadOrCreate(String fileName, Class<T> configClass) {
         ensureInitialized();
@@ -69,10 +79,17 @@ public final class JsonFileHelper {
             return defaultConfig;
         }
 
-        // Repair by FIELD NAMES (unknown removed, missing added)
-        boolean changed = repairToSchema(raw, schema);
+        // Repair by schema (unknown removed, missing added, invalid types reset per-key)
+        RepairStats stats = new RepairStats();
+        repairObjectToSchema(raw, schema, stats);
+        boolean changed = (stats.removedUnknown + stats.addedMissing + stats.replacedInvalid) > 0;
         if (changed) {
-            LOGGER.warn(ColorConstants.YELLOW + "Config repaired (unknown fields removed / missing fields added)." + ColorConstants.RESET);
+            LOGGER.warn(ColorConstants.YELLOW +
+                "Config repaired (removedUnknown=" + stats.removedUnknown +
+                ", addedMissing=" + stats.addedMissing +
+                ", replacedInvalid=" + stats.replacedInvalid +
+                ")." + ColorConstants.RESET
+            );
             writeJsonObject(file, raw);
         }
 
@@ -82,18 +99,20 @@ public final class JsonFileHelper {
             LOGGER.info(ColorConstants.GREEN + "Successfully loaded: " + file.getName() + ColorConstants.RESET);
             return config;
         } catch (Exception ex) {
-            // If types are totally broken, don’t guess: recreate default
-            LOGGER.error(ColorConstants.RED + "Config types invalid, recreating default: " + fileName + ColorConstants.RESET, ex);
-            writeJsonObject(file, schema);
+            // Last-resort fallback in memory only. Keep file for manual inspection.
+            LOGGER.error(ColorConstants.RED + "Config could not be deserialized after repair, using defaults in memory: " + fileName + ColorConstants.RESET, ex);
             return defaultConfig;
         }
     }
 
     // ------------------------------------------------------------------------
-    // REPAIR LOGIC (FIELD NAMES ONLY)
+    // REPAIR LOGIC (RECURSIVE)
     // ------------------------------------------------------------------------
-    private static boolean repairToSchema(JsonObject fileJson, JsonObject schemaJson) {
+    private static boolean repairObjectToSchema(JsonObject fileJson, JsonObject schemaJson, RepairStats stats) {
         boolean changed = false;
+
+        // Migrate known legacy aliases before unknown-key removal.
+        changed |= migrateAliases(fileJson, schemaJson);
 
         // 1) Remove unknown keys (renamed/old fields)
         Iterator<Map.Entry<String, JsonElement>> it = fileJson.entrySet().iterator();
@@ -101,20 +120,113 @@ public final class JsonFileHelper {
             String key = it.next().getKey();
             if (!schemaJson.has(key)) {
                 it.remove();
+                stats.removedUnknown++;
                 changed = true;
             }
         }
 
-        // 2) Add missing keys (new fields)
+        // 2) Add missing keys and repair existing keys
         for (Map.Entry<String, JsonElement> e : schemaJson.entrySet()) {
             String key = e.getKey();
+            JsonElement schemaValue = e.getValue();
+
             if (!fileJson.has(key)) {
-                fileJson.add(key, e.getValue());
+                fileJson.add(key, schemaValue.deepCopy());
+                stats.addedMissing++;
+                changed = true;
+                continue;
+            }
+
+            JsonElement repairedValue = repairElementToSchema(fileJson.get(key), schemaValue, stats);
+            if (repairedValue != fileJson.get(key)) {
+                fileJson.add(key, repairedValue);
                 changed = true;
             }
         }
 
         return changed;
+    }
+
+    private static boolean migrateAliases(JsonObject fileJson, JsonObject schemaJson) {
+        boolean changed = false;
+        for (Map.Entry<String, String> alias : KEY_ALIASES.entrySet()) {
+            String legacyKey = alias.getKey();
+            String canonicalKey = alias.getValue();
+            if (!fileJson.has(legacyKey)) continue;
+            if (!schemaJson.has(canonicalKey)) continue;
+            if (fileJson.has(canonicalKey)) continue;
+
+            fileJson.add(canonicalKey, fileJson.get(legacyKey));
+            fileJson.remove(legacyKey);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static JsonElement repairElementToSchema(JsonElement fileValue, JsonElement schemaValue, RepairStats stats) {
+        if (!isTypeCompatible(fileValue, schemaValue)) {
+            stats.replacedInvalid++;
+            return schemaValue.deepCopy();
+        }
+
+        // Optional fields with null defaults are untyped; keep user value as-is.
+        if (schemaValue == null || schemaValue.isJsonNull()) {
+            return fileValue;
+        }
+
+        if (schemaValue.isJsonObject()) {
+            JsonObject fileObj = fileValue.getAsJsonObject();
+            JsonObject schemaObj = schemaValue.getAsJsonObject();
+            repairObjectToSchema(fileObj, schemaObj, stats);
+            return fileObj;
+        }
+
+        if (schemaValue.isJsonArray()) {
+            JsonArray schemaArr = schemaValue.getAsJsonArray();
+            JsonArray fileArr = fileValue.getAsJsonArray();
+
+            // No template element available -> keep user array content.
+            if (schemaArr.isEmpty()) return fileArr;
+
+            JsonElement template = schemaArr.get(0);
+            for (int i = 0; i < fileArr.size(); i++) {
+                JsonElement repaired = repairElementToSchema(fileArr.get(i), template, stats);
+                if (repaired != fileArr.get(i)) {
+                    fileArr.set(i, repaired);
+                }
+            }
+
+            return fileArr;
+        }
+
+        return fileValue; // Primitive, already type-compatible.
+    }
+
+    private static boolean isTypeCompatible(JsonElement fileValue, JsonElement schemaValue) {
+        if (schemaValue == null || schemaValue.isJsonNull()) {
+            return true; // null default means "accept any type"
+        }
+        if (fileValue == null || fileValue.isJsonNull()) {
+            return false;
+        }
+        if (schemaValue.isJsonObject()) return fileValue.isJsonObject();
+        if (schemaValue.isJsonArray()) return fileValue.isJsonArray();
+        if (!schemaValue.isJsonPrimitive()) return false;
+        if (!fileValue.isJsonPrimitive()) return false;
+
+        JsonPrimitive schemaPrim = schemaValue.getAsJsonPrimitive();
+        JsonPrimitive filePrim = fileValue.getAsJsonPrimitive();
+
+        if (schemaPrim.isBoolean()) return filePrim.isBoolean();
+        if (schemaPrim.isNumber()) return filePrim.isNumber();
+        if (schemaPrim.isString()) return filePrim.isString();
+        return false;
+    }
+
+    private static final class RepairStats {
+        int removedUnknown = 0;
+        int addedMissing = 0;
+        int replacedInvalid = 0;
     }
 
     // ------------------------------------------------------------------------

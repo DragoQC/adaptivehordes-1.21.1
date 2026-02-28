@@ -6,13 +6,16 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.ModContainer;
 
+import com.dragoqc.adaptivehordes.commands.AdaptiveHordesCommands;
+import com.dragoqc.adaptivehordes.config.ConfigManager;
 import com.dragoqc.adaptivehordes.constants.*;
-import com.dragoqc.adaptivehordes.JsonFileHelper.JsonFileHelper;
-import com.dragoqc.adaptivehordes.MobWaveScheduler.MobWaveScheduler;
 import com.dragoqc.adaptivehordes.models.*;
+import com.dragoqc.adaptivehordes.mobwave.MobWaveDropsHandler;
+import com.dragoqc.adaptivehordes.mobwave.MobWaveRuntimeController;
+import com.dragoqc.adaptivehordes.mobwave.MobWaveScheduler;
+import com.dragoqc.adaptivehordes.playerscanner.PlayerScannerScheduler;
 
 import net.neoforged.neoforge.common.NeoForge;
-import com.dragoqc.adaptivehordes.PlayerScannerScheduler.PlayerScannerScheduler;
 
 @Mod(AdaptiveHordes.MODID)
 public class AdaptiveHordes {
@@ -22,21 +25,21 @@ public class AdaptiveHordes {
 	// Config instances
 	public static DefaultModConfig modConfig;
 	public static DefaultScalingConfig scalingConfig;
-	public static DefaultWaveConfig WaveConfig;
+	public static DefaultMobConfig mobConfig;
+	public static DefaultIgnoreConfig ignoreConfig;
 
 	public AdaptiveHordes(IEventBus modEventBus, ModContainer modContainer) {
 		LOGGER.info(ColorConstants.GREEN + "Adaptive Horde is loading..." + ColorConstants.RESET);
 
-		// Initialize config system
-		JsonFileHelper.initializeConfigFolder();
-
-		// Load all configs
-		modConfig = JsonFileHelper.loadOrCreate(ConfigConstants.MOD_CONFIG_FILE, DefaultModConfig.class);
-		scalingConfig = JsonFileHelper.loadOrCreate(ConfigConstants.SCALING_CONFIG_FILE, DefaultScalingConfig.class);
+		// Initialize config system and load all JSON-backed configs.
+		ConfigManager.initializeAndLoadAll();
 
 		// Register the scheduler (VERY IMPORTANT)
 		NeoForge.EVENT_BUS.register(PlayerScannerScheduler.class);
 		NeoForge.EVENT_BUS.register(MobWaveScheduler.class);
+		NeoForge.EVENT_BUS.register(MobWaveDropsHandler.class);
+		NeoForge.EVENT_BUS.register(MobWaveRuntimeController.class);
+		NeoForge.EVENT_BUS.addListener(AdaptiveHordesCommands::onRegisterCommands);
 
 		LOGGER.info(ColorConstants.CYAN + "All configs loaded successfully!" + ColorConstants.RESET);
 
