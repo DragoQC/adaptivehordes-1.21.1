@@ -17,7 +17,6 @@ import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.MobSpawnType;
-import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -69,33 +68,6 @@ public final class MobWaveSpawner {
 
     public static boolean isWaveSpawnedMob(net.minecraft.world.entity.LivingEntity entity) {
         return entity.getPersistentData().getBoolean(TAG_WAVE_SPAWNED);
-    }
-
-    public static int spawnWave(ServerLevel level, ServerPlayer targetPlayer, Wave wave, int baseHordeSize, PlayerScanResult scan) {
-        if (level == null || targetPlayer == null || wave == null || wave.waveContent == null || wave.waveContent.isEmpty()) {
-            return 0;
-        }
-
-        List<Mob> activeMobs = MobWave.pickActiveMobs(wave);
-        if (activeMobs.isEmpty()) {
-            activeMobs = new ArrayList<>(wave.waveContent);
-        }
-        activeMobs.removeIf(m -> m == null || m.presenceWeight <= 0.0);
-        if (activeMobs.isEmpty()) return 0;
-
-        int totalToSpawn = computeTotalMobCount(baseHordeSize, wave, scan);
-        UUID spawnId = UUID.randomUUID();
-        int spawned = 0;
-
-        for (int i = 0; i < totalToSpawn; i++) {
-            Mob template = weightedPick(activeMobs);
-            if (template == null) continue;
-            if (spawnSingle(level, targetPlayer, wave, template, spawnId, scan)) {
-                spawned++;
-            }
-        }
-
-        return spawned;
     }
 
     public static int estimateWaveMobCount(int baseHordeSize, Wave wave, PlayerScanResult scan) {
@@ -168,9 +140,9 @@ public final class MobWaveSpawner {
         if (type == null) return false;
 
         Entity entity = type.create(level);
-        if (!(entity instanceof PathfinderMob mob)) return false;
+        if (!(entity instanceof net.minecraft.world.entity.Mob mob)) return false;
 
-        BlockPos spawnPos = findSpawnPos(level, targetPlayer.blockPosition());
+        BlockPos spawnPos = findSpawnPos(level, mob, targetPlayer.blockPosition());
         if (spawnPos == null) return false;
 
         mob.moveTo(spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, level.random.nextFloat() * 360.0f, 0.0f);
@@ -184,7 +156,7 @@ public final class MobWaveSpawner {
         mob.setPersistenceRequired();
         forceWaveTarget(mob, targetPlayer);
 
-        if (!level.noCollision(mob)) {
+        if (!isSpawnSpaceClear(level, mob, spawnPos)) {
             mob.discard();
             return false;
         }
@@ -196,9 +168,9 @@ public final class MobWaveSpawner {
         return true;
     }
 
-    private static BlockPos findSpawnPos(ServerLevel level, BlockPos center) {
+    private static BlockPos findSpawnPos(ServerLevel level, net.minecraft.world.entity.Mob mob, BlockPos center) {
         if (!level.dimension().equals(Level.OVERWORLD)) {
-            return findSpawnPosInCavernDimensions(level, center);
+            return findSpawnPosInCavernDimensions(level, mob, center);
         }
 
         int minDist = Math.max(4, AdaptiveHordes.mobConfig.spawnMinDistance);
@@ -212,16 +184,14 @@ public final class MobWaveSpawner {
             int z = center.getZ() + Mth.floor(Math.sin(angle) * radius);
             BlockPos top = level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, new BlockPos(x, center.getY(), z));
 
-            if (!level.getWorldBorder().isWithinBounds(top)) continue;
-            if (level.getBlockState(top.below()).isAir()) continue;
-            if (!level.getBlockState(top).isAir()) continue;
+            if (!isValidSpawnCandidate(level, mob, top.below(), top)) continue;
             return top;
         }
 
         return null;
     }
 
-    private static BlockPos findSpawnPosInCavernDimensions(ServerLevel level, BlockPos center) {
+    private static BlockPos findSpawnPosInCavernDimensions(ServerLevel level, net.minecraft.world.entity.Mob mob, BlockPos center) {
         int minDist = Math.max(4, AdaptiveHordes.mobConfig.spawnMinDistance);
         int maxDist = Math.max(minDist + 1, AdaptiveHordes.mobConfig.spawnMaxDistance);
         int attempts = Math.max(8, AdaptiveHordes.mobConfig.spawnPositionAttempts * 2);
@@ -241,21 +211,30 @@ public final class MobWaveSpawner {
             for (int y = yStart; y >= yEnd; y--) {
                 BlockPos ground = new BlockPos(x, y, z);
                 BlockPos spawn = ground.above();
-                BlockPos head = spawn.above();
 
-                if (!level.getWorldBorder().isWithinBounds(spawn)) continue;
-                if (level.getBlockState(ground).isAir()) continue;
-                if (!level.getBlockState(ground).blocksMotion()) continue;
-                if (!level.getBlockState(spawn).isAir()) continue;
-                if (!level.getBlockState(head).isAir()) continue;
-
+                if (!isValidSpawnCandidate(level, mob, ground, spawn)) continue;
                 return spawn;
             }
         }
         return null;
     }
 
-    private static void applyMobStats(PathfinderMob mob, Mob template, Wave wave, PlayerScanResult scan) {
+    private static boolean isValidSpawnCandidate(ServerLevel level, net.minecraft.world.entity.Mob mob, BlockPos ground, BlockPos spawn) {
+        if (!level.getWorldBorder().isWithinBounds(spawn)) return false;
+        if (level.getBlockState(ground).isAir()) return false;
+        if (!level.getBlockState(ground).blocksMotion()) return false;
+        if (!level.getBlockState(spawn).isAir()) return false;
+
+        mob.moveTo(spawn.getX() + 0.5, spawn.getY(), spawn.getZ() + 0.5, mob.getYRot(), mob.getXRot());
+        return level.noCollision(mob);
+    }
+
+    private static boolean isSpawnSpaceClear(ServerLevel level, net.minecraft.world.entity.Mob mob, BlockPos spawn) {
+        if (!level.getWorldBorder().isWithinBounds(spawn)) return false;
+        return level.noCollision(mob);
+    }
+
+    private static void applyMobStats(net.minecraft.world.entity.Mob mob, Mob template, Wave wave, PlayerScanResult scan) {
         if (template.baby && mob instanceof Zombie zombie) {
             zombie.setBaby(true);
         }
@@ -271,7 +250,7 @@ public final class MobWaveSpawner {
         applyRandomArmor(mob, template, wave);
     }
 
-    private static void applyRandomArmor(PathfinderMob mob, Mob template, Wave wave) {
+    private static void applyRandomArmor(net.minecraft.world.entity.Mob mob, Mob template, Wave wave) {
         double chance = Mth.clamp(template.randomArmorChance, 0.0, 1.0);
         if (chance <= 0.0) return;
         if (ThreadLocalRandom.current().nextDouble() > chance) return;
@@ -369,14 +348,14 @@ public final class MobWaveSpawner {
         return t4;
     }
 
-    private static void setAttributeBase(PathfinderMob mob, net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr, double base) {
+    private static void setAttributeBase(net.minecraft.world.entity.Mob mob, net.minecraft.core.Holder<net.minecraft.world.entity.ai.attributes.Attribute> attr, double base) {
         AttributeInstance inst = mob.getAttribute(attr);
         if (inst != null) {
             inst.setBaseValue(base);
         }
     }
 
-    private static void tagRuntimeData(PathfinderMob mob, UUID spawnId, ServerPlayer targetPlayer) {
+    private static void tagRuntimeData(net.minecraft.world.entity.Mob mob, UUID spawnId, ServerPlayer targetPlayer) {
         CompoundTag tag = mob.getPersistentData();
         tag.putString(TAG_WAVE_SPAWN_ID, spawnId.toString());
         tag.putString(TAG_PRIMARY_TARGET_UUID, targetPlayer.getUUID().toString());

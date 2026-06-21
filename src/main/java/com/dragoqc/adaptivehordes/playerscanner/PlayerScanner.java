@@ -1,7 +1,6 @@
 package com.dragoqc.adaptivehordes.playerscanner;
 
 import com.dragoqc.adaptivehordes.AdaptiveHordes;
-import com.dragoqc.adaptivehordes.constants.ConfigConstants;
 import com.dragoqc.adaptivehordes.models.DefaultWeaponOverridesConfig;
 import com.dragoqc.adaptivehordes.models.PlayerScanResult;
 import com.dragoqc.adaptivehordes.models.WeaponOverrideEntry;
@@ -57,6 +56,7 @@ public final class PlayerScanner {
     }
 
     public static PlayerScanResult getPlayerData(UUID playerId) {
+        if (playerId == null) return null;
         return CACHE.get(playerId.toString());
     }
 
@@ -88,7 +88,8 @@ public final class PlayerScanner {
         Long previousSignature = SIGNATURE_CACHE.get(key);
         boolean changed = previousSignature == null || previousSignature.longValue() != signature;
         boolean missing = !CACHE.containsKey(key);
-        if (missing || changed) {
+        boolean stale = lastScan == Long.MIN_VALUE || (now - lastScan) >= maxStale;
+        if (missing || changed || stale) {
             scanPlayer(player);
             SIGNATURE_CACHE.put(key, signature);
             LAST_SCAN_TICK.put(key, now);
@@ -126,8 +127,9 @@ public final class PlayerScanner {
         result.meleePower = power.meleePower;
         result.arrowPower = power.rangedPower;
 
-				result.gameTime = String.valueOf(getGameTime(player));
-				result.gameTimeInHours = String.valueOf(ticksToHours(getGameTime(player)));
+        long playTime = getGameTime(player);
+        result.gameTime = String.valueOf(playTime);
+        result.gameTimeInHours = String.valueOf(ticksToHours(playTime));
 
         result.totalArmor = (int) player.getAttributeValue(Attributes.ARMOR);
         result.totalArmorToughness = player.getAttributeValue(Attributes.ARMOR_TOUGHNESS);
@@ -175,7 +177,7 @@ public final class PlayerScanner {
                 return;
             }
 
-            double melee = getMainHandAttackDamage(player,stack);
+            double melee = getMainHandAttackDamage(player, stack);
             if (melee > bestMelee[0]) bestMelee[0] = melee;
         });
 
@@ -204,28 +206,20 @@ public final class PlayerScanner {
     }
 
     /** "Attack Damage" if this stack were held in MAINHAND. */
-		private static double getMainHandAttackDamage(Player player, ItemStack stack) {
-			if (stack.isEmpty()) return 0.0;
+    private static double getMainHandAttackDamage(Player player, ItemStack stack) {
+        if (stack.isEmpty()) return 0.0;
 
-			if (isInfinitySword(stack)) {
-				return ConfigConstants.INFINITY_SWORD_DAMAGE;
-			}	
+        final double[] modDamage = { 0.0 };
 
-			final double[] modDamage = { 0.0 };
+        stack.getAttributeModifiers().forEach(EquipmentSlot.MAINHAND, (attr, modifier) -> {
+            if (attr.is(Attributes.ATTACK_DAMAGE)) {
+                modDamage[0] += modifier.amount();
+            }
+        });
 
-			stack.getAttributeModifiers().forEach(EquipmentSlot.MAINHAND, (attr, modifier) -> {
-					if (attr.is(Attributes.ATTACK_DAMAGE)) {
-							modDamage[0] += modifier.amount();
-					}
-			});
-
-			if (modDamage[0] <= 0.0) return 0.0;
-			return 1.0 + modDamage[0]; // base player damage + modifier
-		}
-		private static boolean isInfinitySword(ItemStack stack) {
-			String id = stack.getItem().toString();
-    	return "avaritia:infinity_sword".equals(id);
-		}
+        if (modDamage[0] <= 0.0) return 0.0;
+        return 1.0 + modDamage[0]; // base player damage + modifier
+    }
 
     private static boolean isRangedWeapon(ItemStack stack) {
         if (stack.isEmpty()) return false;
@@ -288,17 +282,15 @@ public final class PlayerScanner {
     // ENCHANTMENTS
     // ------------------------------------------------------------------------
 
-    /** Counts how many inventory items have at least one enchantment. */
+    /** Counts how many equipped, held, and inventory items have at least one enchantment. */
     private static int countEnchantedItems(Player player) {
-        int count = 0;
-
-        for (ItemStack stack : player.getInventory().items) {
+        final int[] count = { 0 };
+        forEachPlayerStack(player, stack -> {
             if (!stack.isEmpty() && EnchantmentHelper.hasAnyEnchantments(stack)) {
-                count++;
+                count[0]++;
             }
-        }
-
-        return count;
+        });
+        return count[0];
     }
 
     // ------------------------------------------------------------------------
@@ -311,22 +303,21 @@ public final class PlayerScanner {
         for (ItemStack s : player.getInventory().offhand) action.accept(s);
     }
 
-
-		// ------------------------------------------------------------------------
+    // ------------------------------------------------------------------------
     // GAMETIME RETRIEVAL
     // ------------------------------------------------------------------------
-		private static long getGameTime(Player player) {
-			if (!(player instanceof ServerPlayer serverPlayer)) {
-					return 0L; // Client or fake player
-			}
-			// PLAY_TIME is stored in ticks
-			return serverPlayer.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME));
-		}
-		private static int ticksToHours(long ticks) {
-			long seconds = ticks / 20;
-			long minutes = seconds / 60;
-			return (int)(minutes / 60);  // total whole hours
-		}
+    private static long getGameTime(Player player) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
+            return 0L;
+        }
+        return serverPlayer.getStats().getValue(Stats.CUSTOM.get(Stats.PLAY_TIME));
+    }
+
+    private static int ticksToHours(long ticks) {
+        long seconds = ticks / 20;
+        long minutes = seconds / 60;
+        return (int) (minutes / 60);
+    }
 
     private static long computePlayerSignature(Player player) {
         long hash = 1469598103934665603L; // FNV-1a offset basis
@@ -334,20 +325,14 @@ public final class PlayerScanner {
         hash = fnvMix(hash, Double.doubleToLongBits(player.getAttributeValue(Attributes.ARMOR_TOUGHNESS)));
         hash = fnvMix(hash, Double.doubleToLongBits(player.getMaxHealth()));
 
-        for (ItemStack stack : player.getInventory().items) {
-            hash = hashItemStack(hash, stack);
-        }
-        for (ItemStack stack : player.getInventory().armor) {
-            hash = hashItemStack(hash, stack);
-        }
-        for (ItemStack stack : player.getInventory().offhand) {
-            hash = hashItemStack(hash, stack);
-        }
+        for (ItemStack stack : player.getInventory().items) hash = hashItemStack(hash, player, stack);
+        for (ItemStack stack : player.getInventory().armor) hash = hashItemStack(hash, player, stack);
+        for (ItemStack stack : player.getInventory().offhand) hash = hashItemStack(hash, player, stack);
 
         return hash;
     }
 
-    private static long hashItemStack(long seed, ItemStack stack) {
+    private static long hashItemStack(long seed, Player player, ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
             return fnvMix(seed, 0x9E3779B97F4A7C15L);
         }
@@ -358,6 +343,11 @@ public final class PlayerScanner {
         hash = fnvMix(hash, stack.getDamageValue());
         hash = fnvMix(hash, stack.getMaxDamage());
         hash = fnvMix(hash, EnchantmentHelper.hasAnyEnchantments(stack) ? 1 : 0);
+        hash = fnvMix(hash, getEnchantmentLevel(player, stack, Enchantments.POWER));
+        hash = fnvMix(hash, getEnchantmentLevel(player, stack, Enchantments.FLAME));
+        hash = fnvMix(hash, getEnchantmentLevel(player, stack, Enchantments.PIERCING));
+        hash = fnvMix(hash, getEnchantmentLevel(player, stack, Enchantments.MULTISHOT));
+        hash = fnvMix(hash, getEnchantmentLevel(player, stack, Enchantments.QUICK_CHARGE));
         return hash;
     }
 

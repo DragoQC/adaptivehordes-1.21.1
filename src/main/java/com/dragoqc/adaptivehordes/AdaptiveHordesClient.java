@@ -8,35 +8,25 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 
+import com.dragoqc.adaptivehordes.client.WaveHudOverlay;
 import com.dragoqc.adaptivehordes.models.WeaponPower;
 import com.dragoqc.adaptivehordes.playerscanner.PlayerScanner;
 
-// This class will not load on dedicated servers. Accessing client side code from here is safe.
 @Mod(value = AdaptiveHordes.MODID, dist = Dist.CLIENT)
-// You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
 @EventBusSubscriber(modid = AdaptiveHordes.MODID, value = Dist.CLIENT)
 public class AdaptiveHordesClient {
-    public AdaptiveHordesClient(ModContainer container) {
-        // Allows NeoForge to create a config screen for this mod's configs.
-        // The config screen is accessed by going to the Mods screen > clicking on your mod > clicking on config.
-        // Do not forget to add translations for your config options to the en_us.json file.
+    public AdaptiveHordesClient(IEventBus modEventBus, ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
-    }
-
-    @SubscribeEvent
-    static void onClientSetup(FMLClientSetupEvent event) {
-        // Some client setup code
-        AdaptiveHordes.LOGGER.info("HELLO FROM CLIENT SETUP");
-        AdaptiveHordes.LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+        modEventBus.addListener(WaveHudOverlay::registerLayer);
     }
 
     @SubscribeEvent
@@ -90,6 +80,12 @@ public class AdaptiveHordesClient {
     private static int countEnchantedItems(LocalPlayer player) {
         int count = 0;
         for (ItemStack stack : player.getInventory().items) {
+            if (!stack.isEmpty() && EnchantmentHelper.hasAnyEnchantments(stack)) count++;
+        }
+        for (ItemStack stack : player.getInventory().armor) {
+            if (!stack.isEmpty() && EnchantmentHelper.hasAnyEnchantments(stack)) count++;
+        }
+        for (ItemStack stack : player.getInventory().offhand) {
             if (!stack.isEmpty() && EnchantmentHelper.hasAnyEnchantments(stack)) count++;
         }
         return count;

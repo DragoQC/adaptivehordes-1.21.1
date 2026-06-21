@@ -1,47 +1,13 @@
 package com.dragoqc.adaptivehordes.models;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public class DefaultWaveConfig {
-    public String _about = "Defines wave templates and per-mob composition/drop behavior.";
-    public Map<String, String> _keyInfo = new LinkedHashMap<>();
-    public Map<String, String> _options = new LinkedHashMap<>();
-
     public List<Wave> waves = new ArrayList<>();
 
     // No-arg constructor required for Gson
     public DefaultWaveConfig() {
-        _keyInfo.put("waves[].name", "Unique wave name used by commands and runtime.");
-        _keyInfo.put("waves[].displayName", "Player-facing wave name (used for bossbar/messages).");
-        _keyInfo.put("waves[].waveSpawningMessage", "Message shown on screen when this wave starts. Supports {wave}, {player}, {count}.");
-        _keyInfo.put("waves[].dimensions[]", "Optional allowed dimensions. Empty means all. Example: minecraft:overworld.");
-        _keyInfo.put("waves[].strengthRequirement", "Minimum player gear score required for wave eligibility.");
-        _keyInfo.put("waves[].waveSpawnChance", "0.0..1.0 chance weight among eligible waves.");
-        _keyInfo.put("waves[].totalMobMultiplier", "Scales total mobs planned for this wave.");
-        _keyInfo.put("waves[].waveDrops[]", "Optional drops applied to every mob in this wave.");
-        _keyInfo.put("waves[].waveContent[].entityId", "Any valid living entity id to spawn (vanilla or modded).");
-        _keyInfo.put("waves[].waveContent[].baseHealth", "MAX_HEALTH base applied to spawned mob.");
-        _keyInfo.put("waves[].waveContent[].baseDamage", "ATTACK_DAMAGE base applied to spawned mob.");
-        _keyInfo.put("waves[].waveContent[].baseSpeed", "MOVEMENT_SPEED base applied to spawned mob.");
-        _keyInfo.put("waves[].waveContent[].ranged", "Metadata flag for your own balancing/UI logic.");
-        _keyInfo.put("waves[].waveContent[].presenceWeight", "Relative selection weight for this mob in wave.");
-        _keyInfo.put("waves[].waveContent[].amountMultiplier", "Additional per-mob amount weight multiplier.");
-        _keyInfo.put("waves[].waveContent[].spawnChanceMin", "Min per-spawn-cycle chance for this mob to be active.");
-        _keyInfo.put("waves[].waveContent[].spawnChanceMax", "Max per-spawn-cycle chance for this mob to be active.");
-        _keyInfo.put("waves[].waveContent[].baby", "true/false: try spawning as baby (only works for supported mobs).");
-        _keyInfo.put("waves[].waveContent[].randomArmorChance", "0.0..1.0 chance this mob gets random armor pieces.");
-        _keyInfo.put("waves[].waveContent[].randomArmorMaxPieces", "1..4 max random armor pieces equipped when chance passes.");
-        _keyInfo.put("waves[].waveContent[].dropsMode", "How custom drops combine with vanilla drops.");
-        _keyInfo.put("waves[].waveContent[].drops[]", "Per-mob custom drops for wave-spawned mobs only.");
-        _keyInfo.put("Drop.itemId", "Valid item id.");
-        _keyInfo.put("Drop.minCount/maxCount", "Random attempts sampled in this inclusive range.");
-        _keyInfo.put("Drop.chance", "0.0..1.0 chance per attempt (independent rolls).");
-
-        _options.put("dropsMode", "ADD, OVERRIDE");
-
         waves.add(wave("undead", "minecraft:overworld", 100, List.of(
             armor(mob("minecraft:zombie", 20, 4, 0.23f, false, 1.2, 1.0, 0.65, 1.00), 0.20, 2)
                 .addDrop(drop("minecraft:rotten_flesh", 1, 4, 0.60f)),

@@ -1,31 +1,29 @@
-# Adaptive Horde
+# Adaptive Hordes
 
 Progression-based horde spawning for NeoForge 1.21.1.
 
-Adaptive Horde evaluates each player's gear score and spawns wave mobs that scale with that player. It is built to be JSON-first, so server owners can tune behavior without touching Java.
+Adaptive Hordes evaluates each player's gear score and spawns wave mobs that scale with that player. The mod intentionally uses JSON config files instead of NeoForge TOML config specs so server owners can keep the current editable file layout and existing configs remain repairable.
 
 ## Quick Start
 
-1. Run the game/server once to generate configs in:
-`config/adaptivehordes/`
-2. Edit JSON files.
-3. Reload in game:
-`/adaptivehorde reload`
+1. Run the game or server once to generate configs in `config/adaptivehordes/`.
+2. Read `config/adaptivehordes/ConfigHelp.md` for field explanations.
+3. Edit the JSON files.
+4. Reload in game with `/adaptivehorde reload`.
 
 ## Config Files
 
-Current filenames are kept for compatibility. Friendly names are listed for clarity.
+- `ModConfig.json` - core horde runtime and pacing.
+- `ScalingConfig.json` - gear score and weapon scaling rules.
+- `MobConfig.json` - spawned mob runtime controls.
+- `IgnoreConfig.json` - ignored player UUIDs.
+- `WeaponOverrides.json` - manual weapon damage registry.
+- `waves.json` - wave catalog and mob entries.
+- `ConfigHelp.md` - generated documentation for the JSON files.
 
-- `ModConfig.json` (Core Horde Runtime)
-- `ScalingConfig.json` (Gear Score + Scaling Rules)
-- `MobConfig.json` (Wave Mob Runtime Controls)
-- `IgnoreConfig.json` (Ignored Players List)
-- `WeaponOverrides.json` (Manual Weapon Damage Registry)
-- `waves.json` (Wave Catalog)
+### Core Horde Runtime
 
-### Core Horde Runtime (`ModConfig.json`)
-
-Main pacing/timing keys:
+Important `ModConfig.json` keys:
 
 - `enableHordes`
 - `waveCheckInterval`
@@ -33,11 +31,14 @@ Main pacing/timing keys:
 - `waveSpawnWindowEndTick`
 - `baseHordeSize`
 - `maxMobsPerSpawnBatch`
+- `maxLiveMobsPerPlayer`
 - `loadSpawnDelayTicks`
 - `liveScanUpdateIntervalTicks`
 - `liveScanMaxStaleTicks`
 
-### Gear Score + Scaling (`ScalingConfig.json`)
+### Gear Score + Scaling
+
+Important `ScalingConfig.json` keys:
 
 - `armorPointValue`
 - `enchantmentValue`
@@ -54,29 +55,28 @@ Main pacing/timing keys:
 - `weaponPowerHealthBonusMin`
 - `weaponPowerHealthBonusMax`
 - `weaponPowerForMaxHealthBonus`
-- `rangedWeaponOverrides` (item id map)
-- `rangedWeaponTagOverrides` (item tag map)
+- `rangedWeaponOverrides`
 
-### Manual Weapon Registry (`WeaponOverrides.json`)
+### Manual Weapon Registry
 
-Used when modded weapons do not expose reliable damage data.
+`WeaponOverrides.json` is used when modded weapons do not expose reliable damage data.
 
 Each entry:
 
 - `itemId`
-- `ranged` (`true` or `false`)
+- `ranged`
 - `damage`
 
-These overrides are applied first during scan logic, and can force any item to count as melee or ranged weapon power.
+Overrides are applied first during scan logic and can force any item to count as melee or ranged weapon power.
 
-### Wave Catalog (`waves.json`)
+### Wave Catalog
 
-Per-wave:
+Per-wave keys in `waves.json`:
 
-- `name` (code name used by commands/tab completion)
-- `displayName` (player-facing name for UI/boss bar)
-- `waveSpawningMessage` (`{wave}`, `{player}`, `{count}` supported)
-- `dimensions` (`minecraft:overworld`, `minecraft:the_nether`, `minecraft:the_end`)
+- `name`
+- `displayName`
+- `waveSpawningMessage`
+- `dimensions`
 - `strengthRequirement`
 - `waveSpawnChance`
 - `totalMobMultiplier`
@@ -84,7 +84,6 @@ Per-wave:
 
 Per mob entry in `waveContent`:
 
-- `name`
 - `entityId`
 - `baseHealth`
 - `baseDamage`
@@ -97,14 +96,14 @@ Per mob entry in `waveContent`:
 - `baby`
 - `randomArmorChance`
 - `randomArmorMaxPieces`
-- `dropsMode` (`ADD` or `OVERRIDE`)
+- `dropsMode`
 - `drops`
 
 ## Commands
 
 All mod commands start with `/adaptivehorde`.
 
-### Player Commands (no admin permission)
+Player commands:
 
 - `/adaptivehorde announcements`
 - `/adaptivehorde announcements on`
@@ -112,18 +111,13 @@ All mod commands start with `/adaptivehorde`.
 - `/adaptivehorde announcements toggle`
 - `/adaptivehorde gearscore`
 
-### Admin Commands (permission level 2)
-
-General:
+Admin commands require permission level 2:
 
 - `/adaptivehorde reload`
 - `/adaptivehorde gearscore all`
 - `/adaptivehorde gearscore <target>`
 - `/adaptivehorde scan player`
 - `/adaptivehorde scan player <target>`
-
-Wave management:
-
 - `/adaptivehorde waves`
 - `/adaptivehorde wave info <name>`
 - `/adaptivehorde wave clear`
@@ -131,21 +125,12 @@ Wave management:
 - `/adaptivehorde wave resetdefaults`
 - `/adaptivehorde spawn wave <name>`
 - `/adaptivehorde spawn wave <name> <target>`
-
-Debug:
-
 - `/adaptivehorde debug plans`
 - `/adaptivehorde debug player`
 - `/adaptivehorde debug player <target>`
-
-Ignore list:
-
 - `/adaptivehorde ignore <target>`
 - `/adaptivehorde unignore <target>`
 - `/adaptivehorde ignore list`
-
-Weapon override registry:
-
 - `/adaptivehorde weaponoverride addheld <damage>`
 - `/adaptivehorde weaponoverride addheld <damage> <ranged>`
 - `/adaptivehorde weaponoverride removeheld`
@@ -158,16 +143,26 @@ Dangerous reset commands:
 - `/adaptivehorde delete config sure sure sure`
 - `/adaptivehorde delete player scans sure sure sure`
 
+## HUD And Boss Bar
+
+- The left HUD appears when a tracked wave plan starts and shows full wave progress: remaining enemies over total planned enemies.
+- The top vanilla boss bar appears only while spawned wave mobs are alive.
+- The boss bar title shows active spawned enemy count.
+- The boss bar fill tracks active spawned mob health, so damage lowers the bar and later batches can refill it.
+- `/adaptivehorde wave clear` removes active wave mobs, the wave plan, the HUD, and the boss bar.
+
 ## Notes
 
-- `reload` does not delete files; it reloads current files from disk.
+- `/adaptivehorde reload` reloads current files from disk without deleting them.
+- Invalid JSON configs are backed up before defaults are recreated.
 - `delete config sure sure sure` deletes config files and recreates defaults.
 - `weaponoverride reset` deletes `WeaponOverrides.json`, recreates it, and force-rescans online players immediately.
-- Wave announcements are per-player (toggle stored per player).
-- Boss bar appears when wave spawning actually starts (not at pre-compute stage).
+- Wave announcements are stored per player.
+- Adaptive Hordes is an independent NeoForge mod and is not affiliated with or endorsed by Mojang or Microsoft.
 
 ## Developer Check
 
-Compile check:
-
-`bash gradlew compileJava -q`
+```bash
+bash gradlew compileJava -q
+bash gradlew processResources -q
+```

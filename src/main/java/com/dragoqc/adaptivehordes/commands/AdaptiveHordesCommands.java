@@ -331,10 +331,10 @@ public final class AdaptiveHordesCommands {
         }
 
         PlayerScanResult scan = PlayerScanner.ensurePlayerData(target, target.serverLevel().getGameTime());
-        int spawned = MobWaveSpawner.spawnWave(target.serverLevel(), target, wave, AdaptiveHordes.modConfig.baseHordeSize, scan);
-        logCommand(context.getSource(), "spawn wave", wave.name + " -> " + target.getName().getString() + " (" + spawned + ")");
+        int planned = MobWaveScheduler.startWave(context.getSource().getServer(), target, wave, scan, true);
+        logCommand(context.getSource(), "spawn wave", wave.name + " -> " + target.getName().getString() + " (" + planned + " planned)");
         context.getSource().sendSuccess(
-            () -> Component.literal("Adaptive Horde: spawned wave '" + wave.name + "' for " + target.getName().getString() + " (" + spawned + " mobs).").withStyle(ChatFormatting.GREEN),
+            () -> Component.literal("Adaptive Horde: started wave '" + wave.name + "' for " + target.getName().getString() + " (" + planned + " mobs planned).").withStyle(ChatFormatting.GREEN),
             true
         );
         return Command.SINGLE_SUCCESS;
@@ -359,10 +359,11 @@ public final class AdaptiveHordesCommands {
             }
         }
 
+        int clearedPlans = MobWaveScheduler.clearActivePlans(server, waveNameFilter);
         String filterSuffix = (waveNameFilter == null || waveNameFilter.isBlank()) ? "" : " for wave '" + waveNameFilter + "'";
         int finalRemoved = removed;
-        logCommand(context.getSource(), "wave clear", finalRemoved + " removed" + filterSuffix);
-        context.getSource().sendSuccess(() -> Component.literal("Adaptive Horde: cleared " + finalRemoved + " wave enemies" + filterSuffix + ".").withStyle(ChatFormatting.LIGHT_PURPLE), true);
+        logCommand(context.getSource(), "wave clear", finalRemoved + " removed, " + clearedPlans + " active plans cleared" + filterSuffix);
+        context.getSource().sendSuccess(() -> Component.literal("Adaptive Horde: cleared " + finalRemoved + " wave enemies and " + clearedPlans + " active wave plans" + filterSuffix + ".").withStyle(ChatFormatting.LIGHT_PURPLE), true);
         return Command.SINGLE_SUCCESS;
     }
 

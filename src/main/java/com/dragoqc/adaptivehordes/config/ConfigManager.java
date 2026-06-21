@@ -31,6 +31,7 @@ public final class ConfigManager {
         AdaptiveHordes.ignoreConfig = JsonFileHelper.loadOrCreate(ConfigConstants.IGNORE_CONFIG_FILE, DefaultIgnoreConfig.class);
         AdaptiveHordes.weaponOverridesConfig = JsonFileHelper.loadOrCreate(ConfigConstants.WEAPON_OVERRIDES_CONFIG_FILE, DefaultWeaponOverridesConfig.class);
         MobWave.reload();
+        ConfigHelpWriter.writeHelpFile();
     }
 
     public static void reloadAll() {

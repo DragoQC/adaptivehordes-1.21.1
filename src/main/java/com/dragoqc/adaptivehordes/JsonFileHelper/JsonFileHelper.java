@@ -1,6 +1,5 @@
 package com.dragoqc.adaptivehordes.JsonFileHelper;
 
-import com.dragoqc.adaptivehordes.constants.ColorConstants;
 import com.dragoqc.adaptivehordes.constants.ConfigConstants;
 import com.google.gson.*;
 import com.mojang.logging.LogUtils;
@@ -10,6 +9,11 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -20,6 +24,7 @@ public final class JsonFileHelper {
         .serializeNulls()
         .create();
     private static final Logger LOGGER = LogUtils.getLogger();
+    private static final DateTimeFormatter BACKUP_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private static File configDirectory;
 
@@ -34,11 +39,11 @@ public final class JsonFileHelper {
             .toFile();
 
         if (!configDirectory.exists() && !configDirectory.mkdirs()) {
-            LOGGER.error(ColorConstants.RED + "Could not create config directory!" + ColorConstants.RESET);
+            LOGGER.error("Could not create config directory: {}", configDirectory.getAbsolutePath());
             return;
         }
 
-        LOGGER.info(ColorConstants.GREEN + "Config folder ready: " + configDirectory.getAbsolutePath() + ColorConstants.RESET);
+        LOGGER.info("Config folder ready: {}", configDirectory.getAbsolutePath());
     }
 
     public static File getConfigDirectory() {
@@ -52,14 +57,14 @@ public final class JsonFileHelper {
         ensureInitialized();
 
         File file = new File(configDirectory, fileName);
-        LOGGER.info(ColorConstants.CYAN + "Loading config: " + fileName + ColorConstants.RESET);
+        LOGGER.info("Loading config: {}", fileName);
 
         T defaultConfig = newDefault(configClass);
         JsonObject schema = GSON.toJsonTree(defaultConfig).getAsJsonObject();
 
         // Create if missing
         if (!file.exists()) {
-            LOGGER.warn(ColorConstants.YELLOW + "Config file not found, creating default: " + fileName + ColorConstants.RESET);
+            LOGGER.warn("Config file not found, creating default: {}", fileName);
             writeJsonObject(file, schema);
             return defaultConfig;
         }
@@ -67,7 +72,8 @@ public final class JsonFileHelper {
         // Read raw JSON
         JsonObject raw = readJsonObject(file);
         if (raw == null) {
-            LOGGER.warn(ColorConstants.YELLOW + "Config file invalid JSON, recreating default: " + fileName + ColorConstants.RESET);
+            LOGGER.warn("Config file invalid JSON, backing up and recreating default: {}", fileName);
+            backupInvalidConfig(file);
             writeJsonObject(file, schema);
             return defaultConfig;
         }
@@ -77,11 +83,12 @@ public final class JsonFileHelper {
         repairObjectToSchema(raw, schema, stats);
         boolean changed = (stats.removedUnknown + stats.addedMissing + stats.replacedInvalid) > 0;
         if (changed) {
-            LOGGER.warn(ColorConstants.YELLOW +
-                "Config repaired (removedUnknown=" + stats.removedUnknown +
-                ", addedMissing=" + stats.addedMissing +
-                ", replacedInvalid=" + stats.replacedInvalid +
-                ")." + ColorConstants.RESET
+            LOGGER.warn(
+                "Config repaired: {} (removedUnknown={}, addedMissing={}, replacedInvalid={})",
+                fileName,
+                stats.removedUnknown,
+                stats.addedMissing,
+                stats.replacedInvalid
             );
             writeJsonObject(file, raw);
         }
@@ -89,11 +96,11 @@ public final class JsonFileHelper {
         // Deserialize AFTER repair
         try {
             T config = GSON.fromJson(raw, configClass);
-            LOGGER.info(ColorConstants.GREEN + "Successfully loaded: " + file.getName() + ColorConstants.RESET);
+            LOGGER.info("Successfully loaded: {}", file.getName());
             return config;
         } catch (Exception ex) {
             // Last-resort fallback in memory only. Keep file for manual inspection.
-            LOGGER.error(ColorConstants.RED + "Config could not be deserialized after repair, using defaults in memory: " + fileName + ColorConstants.RESET, ex);
+            LOGGER.error("Config could not be deserialized after repair, using defaults in memory: {}", fileName, ex);
             return defaultConfig;
         }
     }
@@ -212,16 +219,33 @@ public final class JsonFileHelper {
             if (root == null || !root.isJsonObject()) return null;
             return root.getAsJsonObject();
         } catch (Exception e) {
+            LOGGER.warn("Could not read config JSON: {}", file.getName(), e);
             return null;
         }
     }
 
     private static void writeJsonObject(File file, JsonObject json) {
+        writeJson(file, json);
+    }
+
+    private static void writeJson(File file, Object value) {
         try (FileWriter writer = new FileWriter(file)) {
-            GSON.toJson(json, writer);
-            LOGGER.info(ColorConstants.GREEN + "Saved config: " + file.getName() + ColorConstants.RESET);
+            GSON.toJson(value, writer);
+            LOGGER.info("Saved config: {}", file.getName());
         } catch (Exception e) {
-            LOGGER.error(ColorConstants.RED + "Error saving config: " + file.getName() + ColorConstants.RESET, e);
+            LOGGER.error("Error saving config: {}", file.getName(), e);
+        }
+    }
+
+    private static void backupInvalidConfig(File file) {
+        if (file == null || !file.exists()) return;
+        String timestamp = LocalDateTime.now().format(BACKUP_TIMESTAMP);
+        File backup = new File(file.getParentFile(), file.getName() + ".invalid-" + timestamp + ".bak");
+        try {
+            Files.copy(file.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            LOGGER.warn("Backed up invalid config {} to {}", file.getName(), backup.getName());
+        } catch (IOException ex) {
+            LOGGER.error("Could not back up invalid config: {}", file.getName(), ex);
         }
     }
 
@@ -238,16 +262,8 @@ public final class JsonFileHelper {
             throw new IllegalStateException("JsonFileHelper not initialized. Call initializeConfigFolder() first.");
         }
     }
-		/**
-	 * Save a config to file
-	 */
-	public static <T> void saveConfig(File configFile, T config) {
-		try (FileWriter writer = new FileWriter(configFile)) {
-			GSON.toJson(config, writer);
-			LOGGER.info(ColorConstants.GREEN + "Saved config: " + configFile.getName() + ColorConstants.RESET);
-		} catch (Exception e) {
-			LOGGER.error(ColorConstants.RED + "Error saving config: " + configFile.getName() + ColorConstants.RESET);
-			e.printStackTrace();
-		}
-	}
+
+    public static <T> void saveConfig(File configFile, T config) {
+        writeJson(configFile, config);
+    }
 }
