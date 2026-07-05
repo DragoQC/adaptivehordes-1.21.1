@@ -60,9 +60,10 @@ Important `ScalingConfig.json` keys:
 ## Horde Targeting And Call-for-Help
 
 - Every horde mob primarily targets the player assigned to it.
-- If a golem, wolf, another player, or other living entity attacks a horde mob, that attacker is temporarily placed above the assigned player in the mob's target priority.
-- The first attack also alerts every Adaptive Hordes mob within `callForHelpRadius`, including nearby mobs from other summoned waves or assigned players.
-- Later attacks from that same entity affect only the directly attacked mob, preventing call-for-help from spreading repeatedly through the horde.
+- If a golem, wolf, player, or other living entity attacks a horde mob, that attacker is placed at the front of the directly hit mob's target queue.
+- A new external attacker alerts every Adaptive Hordes mob within `callForHelpRadius`, including nearby mobs from other waves. Player-focused mobs respond immediately, while each group already fighting another threat splits roughly in half between its current target and the new attacker.
+- If the assigned player attacks a horde mob, the victim and roughly half of each nearby threat group refocus that player. Mobs that keep their current target queue the player or new attacker second.
+- Further hits during `callForHelpCooldownTicks` affect only the directly attacked mob; another group alert becomes possible after the cooldown.
 - Horde mobs do not retaliate against accidental damage from other Adaptive Hordes mobs, although the original damage still applies.
 - When a priority target dies, unloads, or changes dimension, mobs remove it from their queue and resume the next target, eventually returning to their assigned player.
 - Pursuit continues to use safe Minecraft pathfinding and avoids damaging terrain where the mob is vulnerable.

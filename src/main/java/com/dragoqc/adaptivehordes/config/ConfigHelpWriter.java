@@ -59,8 +59,9 @@ public final class ConfigHelpWriter {
             Runtime behavior for mobs spawned by Adaptive Hordes. These settings only affect wave-spawned mobs tagged by this mod.
 
             Horde targeting notes:
-            - An external living attacker is added above the assigned player in the attacked mob's target queue.
-            - An eligible attack alerts all Adaptive Hordes mobs inside `callForHelpRadius`, including mobs from other summoned waves. Further hits during `callForHelpCooldownTicks` affect only the directly attacked mob; the attacker can trigger another nearby alert after the cooldown.
+            - Any valid living attacker, including the assigned player, is placed at the front of the directly attacked mob's target queue.
+            - A new external attacker alerts all Adaptive Hordes mobs inside `callForHelpRadius`, including mobs from other summoned waves. Player-focused mobs respond immediately, while each group already fighting another threat splits roughly in half. Mobs that stay on their current target queue the new attacker second.
+            - When the assigned player attacks, the victim and roughly half of every nearby threat group refocus that player. Further hits during `callForHelpCooldownTicks` affect only the directly attacked mob; another group alert becomes possible after the cooldown.
             - Horde mobs do not retaliate against accidental damage from other Adaptive Hordes mobs. Invalid priority targets are removed before targeting returns to the assigned player.
 
             - `mobDetectionRange`: `FOLLOW_RANGE` applied to spawned mobs. Higher values make mobs acquire and keep targets from farther away.

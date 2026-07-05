@@ -25,8 +25,11 @@ import net.neoforged.neoforge.event.entity.living.LivingChangeTargetEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -114,8 +117,9 @@ public final class MobWaveRuntimeController {
         if (!AdaptiveHordes.mobConfig.persistentTargeting) return;
         if (!(mob.level() instanceof ServerLevel level)) return;
 
+        LivingEntity previousPreferredTarget = resolvePreferredTarget(level, mob);
         ServerPlayer assignedPlayer = resolveAssignedPlayer(level, mob.getPersistentData());
-        if (assignedPlayer != null && assignedPlayer.getUUID().equals(attacker.getUUID())) return;
+        boolean assignedPlayerAttack = assignedPlayer != null && assignedPlayer.getUUID().equals(attacker.getUUID());
 
         pushPriorityTarget(mob, attacker);
         LivingEntity preferred = resolvePreferredTarget(level, mob);
@@ -125,7 +129,7 @@ public final class MobWaveRuntimeController {
 
         double callRadius = getCallForHelpRadius();
         if (callRadius > 0.0D && tryStartCallForHelpCooldown(attacker.getUUID(), level.getGameTime())) {
-            callForHelp(level, mob, attacker, callRadius);
+            callForHelp(level, mob, attacker, callRadius, previousPreferredTarget, assignedPlayerAttack);
         }
     }
 
@@ -254,22 +258,83 @@ public final class MobWaveRuntimeController {
         return Math.floorMod(now + mob.getId(), (long)safeInterval) == 0L;
     }
 
-    private static void callForHelp(ServerLevel level, Mob victim, LivingEntity attacker, double radius) {
+    private static void callForHelp(
+        ServerLevel level,
+        Mob victim,
+        LivingEntity attacker,
+        double radius,
+        LivingEntity victimPreviousTarget,
+        boolean assignedPlayerAttack
+    ) {
         double radiusSquared = radius * radius;
-        for (Mob nearbyMob : level.getEntitiesOfClass(
+        List<Mob> nearbyMobs = level.getEntitiesOfClass(
             Mob.class,
             victim.getBoundingBox().inflate(radius),
             candidate -> candidate.isAlive()
                 && !candidate.isRemoved()
                 && MobWaveSpawner.isWaveSpawnedMob(candidate)
                 && candidate.distanceToSqr(victim) <= radiusSquared
-        )) {
-            pushPriorityTarget(nearbyMob, attacker);
-            LivingEntity preferred = resolvePreferredTarget(level, nearbyMob);
-            if (preferred != null) {
-                MobWaveSpawner.forceWaveTarget(nearbyMob, preferred);
+        );
+        Map<UUID, List<ResponderFocus>> splitGroups = new HashMap<>();
+
+        for (Mob nearbyMob : nearbyMobs) {
+            LivingEntity currentTarget = nearbyMob == victim
+                ? victimPreviousTarget
+                : resolvePreferredTarget(level, nearbyMob);
+            if (currentTarget != null && currentTarget.getUUID().equals(attacker.getUUID())) continue;
+
+            boolean focusedOnAssignedPlayer = isAssignedPlayerTarget(nearbyMob, currentTarget);
+            if (!assignedPlayerAttack && (currentTarget == null || focusedOnAssignedPlayer)) {
+                promoteAndRetarget(nearbyMob, attacker);
+                continue;
+            }
+
+            UUID focusUuid = currentTarget == null ? null : currentTarget.getUUID();
+            splitGroups.computeIfAbsent(focusUuid, ignored -> new ArrayList<>())
+                .add(new ResponderFocus(nearbyMob, currentTarget));
+        }
+
+        for (List<ResponderFocus> splitGroup : splitGroups.values()) {
+            splitThreatGroup(splitGroup, victim, attacker);
+        }
+    }
+
+    private static void splitThreatGroup(List<ResponderFocus> splitGroup, Mob victim, LivingEntity attacker) {
+        if (splitGroup.isEmpty()) return;
+
+        splitGroup.sort(Comparator.comparing(focus -> focus.mob().getUUID()));
+        int promoteCount = (splitGroup.size() + 1) / 2;
+        int promoted = 0;
+
+        for (ResponderFocus focus : splitGroup) {
+            if (focus.mob() != victim) continue;
+            promoteAndRetarget(focus.mob(), attacker);
+            promoted++;
+            break;
+        }
+
+        for (ResponderFocus focus : splitGroup) {
+            if (focus.mob() == victim) continue;
+            if (promoted < promoteCount) {
+                promoteAndRetarget(focus.mob(), attacker);
+                promoted++;
+            } else if (focus.currentTarget() != null) {
+                queuePriorityTargetBelowCurrent(focus.mob(), focus.currentTarget(), attacker);
             }
         }
+    }
+
+    private static void promoteAndRetarget(Mob mob, LivingEntity target) {
+        pushPriorityTarget(mob, target);
+        MobWaveSpawner.forceWaveTarget(mob, target);
+    }
+
+    private static boolean isAssignedPlayerTarget(Mob mob, LivingEntity target) {
+        if (target == null) return false;
+        UUID assignedPlayerUuid = parseUuid(
+            mob.getPersistentData().getString(MobWaveSpawner.TAG_PRIMARY_TARGET_UUID)
+        ).orElse(null);
+        return target.getUUID().equals(assignedPlayerUuid);
     }
 
     private static double getCallForHelpRadius() {
@@ -294,9 +359,6 @@ public final class MobWaveRuntimeController {
         if (MobWaveSpawner.isWaveSpawnedMob(target)) return;
 
         CompoundTag tag = mob.getPersistentData();
-        UUID primaryTarget = parseUuid(tag.getString(MobWaveSpawner.TAG_PRIMARY_TARGET_UUID)).orElse(null);
-        if (target.getUUID().equals(primaryTarget)) return;
-
         String targetUuid = target.getUUID().toString();
         ListTag currentTargets = tag.getList(MobWaveSpawner.TAG_PRIORITY_TARGET_UUIDS, Tag.TAG_STRING);
         ListTag updatedTargets = new ListTag();
@@ -309,6 +371,34 @@ public final class MobWaveRuntimeController {
             if (queuedUuid.isBlank() || !seenTargets.add(queuedUuid)) continue;
             if (parseUuid(queuedUuid).isEmpty()) continue;
             updatedTargets.add(StringTag.valueOf(queuedUuid));
+        }
+
+        tag.put(MobWaveSpawner.TAG_PRIORITY_TARGET_UUIDS, updatedTargets);
+    }
+
+    private static void queuePriorityTargetBelowCurrent(Mob mob, LivingEntity currentTarget, LivingEntity queuedTarget) {
+        if (mob == null || currentTarget == null || queuedTarget == null) return;
+        if (!currentTarget.isAlive() || !queuedTarget.isAlive()) return;
+        if (MobWaveSpawner.isWaveSpawnedMob(currentTarget) || MobWaveSpawner.isWaveSpawnedMob(queuedTarget)) return;
+
+        CompoundTag tag = mob.getPersistentData();
+        String currentTargetUuid = currentTarget.getUUID().toString();
+        String queuedTargetUuid = queuedTarget.getUUID().toString();
+        ListTag currentTargets = tag.getList(MobWaveSpawner.TAG_PRIORITY_TARGET_UUIDS, Tag.TAG_STRING);
+        ListTag updatedTargets = new ListTag();
+        Set<String> seenTargets = new HashSet<>();
+
+        updatedTargets.add(StringTag.valueOf(currentTargetUuid));
+        seenTargets.add(currentTargetUuid);
+        if (updatedTargets.size() < MAX_PRIORITY_TARGETS && seenTargets.add(queuedTargetUuid)) {
+            updatedTargets.add(StringTag.valueOf(queuedTargetUuid));
+        }
+
+        for (int index = 0; index < currentTargets.size() && updatedTargets.size() < MAX_PRIORITY_TARGETS; index++) {
+            String existingUuid = currentTargets.getString(index);
+            if (existingUuid.isBlank() || !seenTargets.add(existingUuid)) continue;
+            if (parseUuid(existingUuid).isEmpty()) continue;
+            updatedTargets.add(StringTag.valueOf(existingUuid));
         }
 
         tag.put(MobWaveSpawner.TAG_PRIORITY_TARGET_UUIDS, updatedTargets);
@@ -378,6 +468,8 @@ public final class MobWaveRuntimeController {
     static void clearCallForHelpCooldowns() {
         CALL_FOR_HELP_COOLDOWNS.clear();
     }
+
+    private record ResponderFocus(Mob mob, LivingEntity currentTarget) {}
 
     private static Optional<UUID> parseUuid(String raw) {
         if (raw == null || raw.isBlank()) return Optional.empty();
