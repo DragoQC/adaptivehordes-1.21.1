@@ -58,8 +58,15 @@ public final class ConfigHelpWriter {
 
             Runtime behavior for mobs spawned by Adaptive Hordes. These settings only affect wave-spawned mobs tagged by this mod.
 
+            Horde targeting notes:
+            - An external living attacker is added above the assigned player in the attacked mob's target queue.
+            - An eligible attack alerts all Adaptive Hordes mobs inside `callForHelpRadius`, including mobs from other summoned waves. Further hits during `callForHelpCooldownTicks` affect only the directly attacked mob; the attacker can trigger another nearby alert after the cooldown.
+            - Horde mobs do not retaliate against accidental damage from other Adaptive Hordes mobs. Invalid priority targets are removed before targeting returns to the assigned player.
+
             - `mobDetectionRange`: `FOLLOW_RANGE` applied to spawned mobs. Higher values make mobs acquire and keep targets from farther away.
-            - `persistentTargeting`: When true, wave mobs keep focusing the assigned player unless another player attacks them.
+            - `persistentTargeting`: When true, wave mobs safely pursue their priority target. External attackers temporarily outrank the assigned player, and invalid targets are removed before pursuit returns to the player.
+            - `callForHelpRadius`: Radius around an attacked horde mob that receives its external attacker as a priority target. This includes Adaptive Hordes mobs from other summoned waves. Values are clamped to `0.0..32.0`; `0.0` limits retaliation to the attacked mob.
+            - `callForHelpCooldownTicks`: Cooldown per external attacker before it can alert nearby horde mobs again. `80` ticks is 4 seconds; `0` allows every eligible hit to alert nearby mobs.
             - `sunlightImmunity`: When true, wave mobs stop burning in sunlight. Useful for daytime hordes or long events.
             - `sizeMultiplier`: `SCALE` attribute applied to spawned mobs. `1.0` means vanilla size. Very large values make valid spawn positions harder to find.
             - `waveMobLifetimeTicks`: Maximum lifetime before a wave mob is cleaned up. `24000` means one Minecraft day.
@@ -99,6 +106,8 @@ public final class ConfigHelpWriter {
             - `itemId`: Exact item id, such as `minecraft:diamond_sword`.
             - `ranged`: `true` for ranged scoring, `false` for melee scoring.
             - `damage`: Manual damage or threat value used in gear score.
+
+            Built-in compatibility takes precedence for Avaritia's `avaritia:infinity_sword`, treating it as `9999` melee power because its execution-style attack is not exposed as normal attack damage.
 
             ## IgnoreConfig.json
 

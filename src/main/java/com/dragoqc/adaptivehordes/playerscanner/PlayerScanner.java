@@ -29,6 +29,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 public final class PlayerScanner {
+    private static final String AVARITIA_INFINITY_SWORD_ITEM_ID = "avaritia:infinity_sword";
+    private static final double AVARITIA_INFINITY_SWORD_POWER = 9999.0D;
 
     // UUID string -> scan result
     private static final Map<String, PlayerScanResult> CACHE = new HashMap<>();
@@ -162,6 +164,11 @@ public final class PlayerScanner {
         forEachPlayerStack(player, stack -> {
             if (stack.isEmpty()) return;
 
+            if (isAvaritiaInfinitySword(stack)) {
+                bestMelee[0] = Math.max(bestMelee[0], AVARITIA_INFINITY_SWORD_POWER);
+                return;
+            }
+
             WeaponOverrideEntry override = getManualWeaponOverride(stack);
             if (override != null) {
                 if (override.ranged) {
@@ -185,6 +192,12 @@ public final class PlayerScanner {
         wp.meleePower = bestMelee[0];
         wp.rangedPower = bestRanged[0];
         return wp;
+    }
+
+    private static boolean isAvaritiaInfinitySword(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+        return AVARITIA_INFINITY_SWORD_ITEM_ID.equals(itemId);
     }
 
     private static WeaponOverrideEntry getManualWeaponOverride(ItemStack stack) {

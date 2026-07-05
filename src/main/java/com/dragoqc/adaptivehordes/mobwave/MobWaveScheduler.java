@@ -627,6 +627,7 @@ public class MobWaveScheduler {
         if (player != null && plan != null && plan.spawnedSuccessful > 0) {
             broadcastWaveCompletedMessage(player);
         }
+        MobWaveRuntimeController.clearCallForHelpCooldownsIfNoActiveHorde(server);
     }
 
     private static void removePlan(UUID playerId) {
@@ -646,6 +647,7 @@ public class MobWaveScheduler {
         if (discardMobs && server != null) {
             discardMobsForSpawnId(server, removed.spawnId);
         }
+        MobWaveRuntimeController.clearCallForHelpCooldownsIfNoActiveHorde(server);
     }
 
     private static void discardMobsForSpawnId(MinecraftServer server, UUID spawnId) {

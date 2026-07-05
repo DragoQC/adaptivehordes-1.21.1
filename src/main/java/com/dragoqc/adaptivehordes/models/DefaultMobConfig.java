@@ -3,6 +3,8 @@ package com.dragoqc.adaptivehordes.models;
 public class DefaultMobConfig {
 	public int mobDetectionRange = 64;
 	public boolean persistentTargeting = true;
+	public double callForHelpRadius = 5.0;
+	public int callForHelpCooldownTicks = 80;
 	public boolean sunlightImmunity = false;
 	public double sizeMultiplier = 1.0;
 	public int waveMobLifetimeTicks = 24000;

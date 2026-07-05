@@ -57,6 +57,25 @@ Important `ScalingConfig.json` keys:
 - `weaponPowerForMaxHealthBonus`
 - `rangedWeaponOverrides`
 
+## Horde Targeting And Call-for-Help
+
+- Every horde mob primarily targets the player assigned to it.
+- If a golem, wolf, another player, or other living entity attacks a horde mob, that attacker is temporarily placed above the assigned player in the mob's target priority.
+- The first attack also alerts every Adaptive Hordes mob within `callForHelpRadius`, including nearby mobs from other summoned waves or assigned players.
+- Later attacks from that same entity affect only the directly attacked mob, preventing call-for-help from spreading repeatedly through the horde.
+- Horde mobs do not retaliate against accidental damage from other Adaptive Hordes mobs, although the original damage still applies.
+- When a priority target dies, unloads, or changes dimension, mobs remove it from their queue and resume the next target, eventually returning to their assigned player.
+- Pursuit continues to use safe Minecraft pathfinding and avoids damaging terrain where the mob is vulnerable.
+
+Important `MobConfig.json` keys:
+
+- `persistentTargeting`
+- `callForHelpRadius`
+- `mobDetectionRange`
+- `maxDistanceFromTarget`
+- `stuckCheckIntervalTicks`
+- `maxStuckTicks`
+
 ### Manual Weapon Registry
 
 `WeaponOverrides.json` is used when modded weapons do not expose reliable damage data.
@@ -67,7 +86,9 @@ Each entry:
 - `ranged`
 - `damage`
 
-Overrides are applied first during scan logic and can force any item to count as melee or ranged weapon power.
+Manual overrides are applied before generic weapon detection and can force any item to count as melee or ranged weapon power.
+
+Built-in compatibility takes precedence for Avaritia's `avaritia:infinity_sword`, treating it as `9999` melee power because its execution-style attack is not represented by normal attack-damage attributes.
 
 ### Wave Catalog
 

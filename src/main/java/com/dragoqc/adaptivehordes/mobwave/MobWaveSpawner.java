@@ -12,7 +12,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -23,6 +25,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.pathfinder.PathType;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,7 +40,7 @@ public final class MobWaveSpawner {
     public static final String TAG_WAVE_MOB_RANGED = "adaptivehordes_wave_mob_ranged";
     public static final String TAG_WAVE_SPAWN_ID = "adaptivehordes_wave_spawn_id";
     public static final String TAG_PRIMARY_TARGET_UUID = "adaptivehordes_primary_target_uuid";
-    public static final String TAG_OVERRIDE_TARGET_UUID = "adaptivehordes_override_target_uuid";
+    public static final String TAG_PRIORITY_TARGET_UUIDS = "adaptivehordes_priority_target_uuids";
     public static final String TAG_SPAWN_GAME_TIME = "adaptivehordes_spawn_game_time";
     public static final String TAG_LAST_POS_X = "adaptivehordes_last_pos_x";
     public static final String TAG_LAST_POS_Y = "adaptivehordes_last_pos_y";
@@ -57,17 +60,33 @@ public final class MobWaveSpawner {
         if (mobEntityId != null) tag.putString(TAG_WAVE_MOB_ENTITY_ID, mobEntityId);
     }
 
-    public static void forceWaveTarget(net.minecraft.world.entity.Mob mob, ServerPlayer targetPlayer) {
-        if (mob == null || targetPlayer == null || !targetPlayer.isAlive()) return;
-        mob.setTarget(targetPlayer);
+    public static void forceWaveTarget(net.minecraft.world.entity.Mob mob, LivingEntity target) {
+        if (mob == null || target == null || !target.isAlive()) return;
+        mob.setTarget(target);
         if (mob instanceof NeutralMob neutralMob) {
-            neutralMob.setPersistentAngerTarget(targetPlayer.getUUID());
+            neutralMob.setPersistentAngerTarget(target.getUUID());
             neutralMob.setRemainingPersistentAngerTime(Math.max(600, neutralMob.getRemainingPersistentAngerTime()));
         }
     }
 
     public static boolean isWaveSpawnedMob(net.minecraft.world.entity.LivingEntity entity) {
-        return entity.getPersistentData().getBoolean(TAG_WAVE_SPAWNED);
+        return entity != null && entity.getPersistentData().getBoolean(TAG_WAVE_SPAWNED);
+    }
+
+    public static void configureRaidPathfinding(net.minecraft.world.entity.Mob mob) {
+        if (mob == null) return;
+
+        if (!mob.fireImmune()) {
+            blockHazardPath(mob, PathType.LAVA);
+            blockHazardPath(mob, PathType.DAMAGE_FIRE);
+            increaseHazardAvoidance(mob, PathType.DANGER_FIRE, 16.0F);
+        }
+
+        blockHazardPath(mob, PathType.DAMAGE_OTHER);
+        blockHazardPath(mob, PathType.DAMAGE_CAUTIOUS);
+        blockHazardPath(mob, PathType.POWDER_SNOW);
+        increaseHazardAvoidance(mob, PathType.DANGER_OTHER, 16.0F);
+        increaseHazardAvoidance(mob, PathType.DANGER_POWDER_SNOW, 8.0F);
     }
 
     public static int estimateWaveMobCount(int baseHordeSize, Wave wave, PlayerScanResult scan) {
@@ -136,7 +155,7 @@ public final class MobWaveSpawner {
         ResourceLocation key = ResourceLocation.tryParse(template.entityId);
         if (key == null) return false;
 
-        var type = BuiltInRegistries.ENTITY_TYPE.get(key);
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(key);
         if (type == null) return false;
 
         Entity entity = type.create(level);
@@ -154,6 +173,7 @@ public final class MobWaveSpawner {
         mob.getPersistentData().putBoolean(TAG_WAVE_MOB_RANGED, template.ranged);
 
         mob.setPersistenceRequired();
+        configureRaidPathfinding(mob);
         forceWaveTarget(mob, targetPlayer);
 
         if (!isSpawnSpaceClear(level, mob, spawnPos)) {
@@ -352,6 +372,19 @@ public final class MobWaveSpawner {
         AttributeInstance inst = mob.getAttribute(attr);
         if (inst != null) {
             inst.setBaseValue(base);
+        }
+    }
+
+    private static void blockHazardPath(net.minecraft.world.entity.Mob mob, PathType pathType) {
+        if (mob.getPathfindingMalus(pathType) >= 0.0F) {
+            mob.setPathfindingMalus(pathType, -1.0F);
+        }
+    }
+
+    private static void increaseHazardAvoidance(net.minecraft.world.entity.Mob mob, PathType pathType, float minimumMalus) {
+        float currentMalus = mob.getPathfindingMalus(pathType);
+        if (currentMalus >= 0.0F && currentMalus < minimumMalus) {
+            mob.setPathfindingMalus(pathType, minimumMalus);
         }
     }
 
