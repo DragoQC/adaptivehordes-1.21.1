@@ -13,6 +13,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
@@ -91,9 +93,6 @@ public final class MobWaveRuntimeController {
                 }
 
                 if (mob instanceof PathfinderMob pathfinderMob) {
-                    if (targetMismatch || isScheduledTick(now, mob, PURSUIT_PATH_REFRESH_TICKS)) {
-                        MobWaveSpawner.configureRaidPathfinding(pathfinderMob);
-                    }
                     updateRaidPursuit(now, pathfinderMob, preferred, isRanged, targetMismatch);
                 }
             } else if (mob.getTarget() != null && MobWaveSpawner.isWaveSpawnedMob(mob.getTarget())) {
@@ -203,6 +202,8 @@ public final class MobWaveRuntimeController {
         boolean isRanged,
         boolean targetMismatch
     ) {
+        if (hasRunningMovementGoal(mob)) return;
+
         PathNavigation navigation = mob.getNavigation();
         Path currentPath = navigation.getPath();
         boolean hasLineOfSight = mob.getSensing().hasLineOfSight(preferred);
@@ -235,6 +236,17 @@ public final class MobWaveRuntimeController {
         if (fallbackPosition != null) {
             navigation.moveTo(fallbackPosition.x, fallbackPosition.y, fallbackPosition.z, pursuitSpeed);
         }
+    }
+
+    private static boolean hasRunningMovementGoal(Mob mob) {
+        for (WrappedGoal wrappedGoal : mob.goalSelector.getAvailableGoals()) {
+            if (!wrappedGoal.isRunning()) continue;
+            if (wrappedGoal.getFlags().contains(Goal.Flag.MOVE)
+                || wrappedGoal.getFlags().contains(Goal.Flag.JUMP)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isScheduledTick(long now, Mob mob, int intervalTicks) {
@@ -360,6 +372,10 @@ public final class MobWaveRuntimeController {
             }
         }
 
+        CALL_FOR_HELP_COOLDOWNS.clear();
+    }
+
+    static void clearCallForHelpCooldowns() {
         CALL_FOR_HELP_COOLDOWNS.clear();
     }
 

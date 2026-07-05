@@ -21,7 +21,7 @@ public final class WaveHudOverlay {
 
     public static void applyPayload(WaveHudUpdatePayload payload) {
         if (payload == null || !payload.active()) {
-            state = WaveHudState.INACTIVE;
+            clearState();
             return;
         }
         state = new WaveHudState(
@@ -31,6 +31,10 @@ public final class WaveHudOverlay {
             Math.max(0, payload.remainingUnspawned()),
             Math.max(0, payload.aliveSpawned())
         );
+    }
+
+    public static void clearState() {
+        state = WaveHudState.INACTIVE;
     }
 
     private static void render(GuiGraphics guiGraphics) {

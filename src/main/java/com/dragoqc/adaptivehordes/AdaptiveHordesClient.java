@@ -13,6 +13,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
@@ -27,6 +28,16 @@ public class AdaptiveHordesClient {
     public AdaptiveHordesClient(IEventBus modEventBus, ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         modEventBus.addListener(WaveHudOverlay::registerLayer);
+    }
+
+    @SubscribeEvent
+    static void onClientLogin(ClientPlayerNetworkEvent.LoggingIn event) {
+        WaveHudOverlay.clearState();
+    }
+
+    @SubscribeEvent
+    static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        WaveHudOverlay.clearState();
     }
 
     @SubscribeEvent

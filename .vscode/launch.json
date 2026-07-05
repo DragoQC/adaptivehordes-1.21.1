@@ -48,13 +48,13 @@
         "-Dforge.logging.console.level\u003ddebug",
         "-Dneoforge.enabledGameTestNamespaces\u003dadaptivehordes",
         "-Dneoforge.enableGameTest\u003dtrue",
-        "-DlegacyClassPath.file\u003d/home/drago/Git/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathClient/classpath.txt",
+        "-DlegacyClassPath.file\u003d/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathClient/classpath.txt",
         "-DignoreList\u003dmixinextras-neoforge-0.5.0.jar,client-extra,neoforge-",
         "-Djava.net.preferIPv6Addresses\u003dsystem"
       ],
       "cwd": "${workspaceFolder}/runs/client",
       "env": {
-        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/adaptivehordes-1.21.1/bin/main"
+        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/bin/main"
       },
       "shortenCommandLine": "argfile"
     },
@@ -73,9 +73,9 @@
         "adaptivehordes",
         "--all",
         "--output",
-        "/home/drago/Git/adaptivehordes-1.21.1/src/generated/resources",
+        "/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/src/generated/resources",
         "--existing",
-        "/home/drago/Git/adaptivehordes-1.21.1/src/main/resources",
+        "/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/src/main/resources",
         "--launchTarget",
         "forgedatadev",
         "--assetIndex",
@@ -108,13 +108,13 @@
         "jdk.naming.dns/com.sun.jndi.dns\u003djava.naming",
         "-Dforge.logging.markers\u003dREGISTRIES",
         "-Dforge.logging.console.level\u003ddebug",
-        "-DlegacyClassPath.file\u003d/home/drago/Git/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathData/classpath.txt",
+        "-DlegacyClassPath.file\u003d/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathData/classpath.txt",
         "-DignoreList\u003dmixinextras-neoforge-0.5.0.jar,client-extra,neoforge-",
         "-Djava.net.preferIPv6Addresses\u003dsystem"
       ],
       "cwd": "${workspaceFolder}/runs/data",
       "env": {
-        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/adaptivehordes-1.21.1/bin/main"
+        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/bin/main"
       },
       "shortenCommandLine": "argfile"
     },
@@ -160,13 +160,13 @@
         "-Dneoforge.enabledGameTestNamespaces\u003dadaptivehordes",
         "-Dneoforge.enableGameTest\u003dtrue",
         "-Dneoforge.gameTestServer\u003dtrue",
-        "-DlegacyClassPath.file\u003d/home/drago/Git/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathGameTestServer/classpath.txt",
+        "-DlegacyClassPath.file\u003d/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathGameTestServer/classpath.txt",
         "-DignoreList\u003dmixinextras-neoforge-0.5.0.jar,client-extra,neoforge-",
         "-Djava.net.preferIPv6Addresses\u003dsystem"
       ],
       "cwd": "${workspaceFolder}/runs/gameTestServer",
       "env": {
-        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/adaptivehordes-1.21.1/bin/main"
+        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/bin/main"
       },
       "shortenCommandLine": "argfile"
     },
@@ -215,13 +215,13 @@
         "jdk.naming.dns/com.sun.jndi.dns\u003djava.naming",
         "-Dforge.logging.markers\u003dREGISTRIES",
         "-Dforge.logging.console.level\u003ddebug",
-        "-DlegacyClassPath.file\u003d/home/drago/Git/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathJunit/classpath.txt",
+        "-DlegacyClassPath.file\u003d/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathJunit/classpath.txt",
         "-DignoreList\u003dmixinextras-neoforge-0.5.0.jar,client-extra,neoforge-",
         "-Djava.net.preferIPv6Addresses\u003dsystem"
       ],
       "cwd": "${workspaceFolder}/runs/junit",
       "env": {
-        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/adaptivehordes-1.21.1/bin/main"
+        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/bin/main"
       },
       "shortenCommandLine": "argfile"
     },
@@ -266,13 +266,13 @@
         "-Dforge.logging.markers\u003dREGISTRIES",
         "-Dforge.logging.console.level\u003ddebug",
         "-Dneoforge.enabledGameTestNamespaces\u003dadaptivehordes",
-        "-DlegacyClassPath.file\u003d/home/drago/Git/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathServer/classpath.txt",
+        "-DlegacyClassPath.file\u003d/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/.gradle/configuration/neoForm/neoFormJoined1.21.1-20240808.144430/steps/writeMinecraftClasspathServer/classpath.txt",
         "-DignoreList\u003dmixinextras-neoforge-0.5.0.jar,client-extra,neoforge-",
         "-Djava.net.preferIPv6Addresses\u003dsystem"
       ],
       "cwd": "${workspaceFolder}/runs/server",
       "env": {
-        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/adaptivehordes-1.21.1/bin/main"
+        "MOD_CLASSES": "adaptivehordes-1.21.1%%/home/drago/Git/MinecraftMods/adaptivehordes-1.21.1/bin/main"
       },
       "shortenCommandLine": "argfile"
     }

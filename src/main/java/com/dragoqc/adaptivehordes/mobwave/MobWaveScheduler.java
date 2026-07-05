@@ -19,7 +19,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -43,6 +45,29 @@ public class MobWaveScheduler {
     // Track per-player cycle queueing so one wave plan is created per cycle.
     private static final Map<UUID, Long> queuedCycleByPlayer = new ConcurrentHashMap<>();
     private static final Map<UUID, SpawnPlan> ACTIVE_SPAWN_PLANS = new ConcurrentHashMap<>();
+
+    @SubscribeEvent
+    public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+
+        UUID playerId = player.getUUID();
+        queuedCycleByPlayer.remove(playerId);
+        removePlan(playerId, player.getServer(), true);
+    }
+
+    @SubscribeEvent
+    public static void onServerStopping(ServerStoppingEvent event) {
+        MinecraftServer server = event.getServer();
+        for (SpawnPlan plan : new ArrayList<>(ACTIVE_SPAWN_PLANS.values())) {
+            if (plan == null) continue;
+            removePlan(plan.playerId, server, true);
+        }
+
+        ACTIVE_SPAWN_PLANS.clear();
+        queuedCycleByPlayer.clear();
+        PlayerScanner.clearCache();
+        MobWaveRuntimeController.clearCallForHelpCooldowns();
+    }
 
     @SubscribeEvent
     public static void onWorldTick(LevelTickEvent.Post event) {
